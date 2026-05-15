@@ -1,0 +1,71 @@
+const BASE = "https://api.polygon.io";
+const KEY = process.env.POLYGON_API_KEY;
+
+async function polyFetch(path: string) {
+  const sep = path.includes("?") ? "&" : "?";
+  const res = await fetch(`${BASE}${path}${sep}apiKey=${KEY}`, {
+    next: { revalidate: 30 },
+  });
+  if (!res.ok) throw new Error(`Polygon ${res.status}: ${path}`);
+  return res.json();
+}
+
+export interface TickerSnapshot {
+  ticker: string;
+  price: number;
+  change: number;
+  changePct: number;
+  volume: number;
+  timestamp: number;
+}
+
+export async function getSnapshots(tickers: string[]): Promise<TickerSnapshot[]> {
+  if (!tickers.length) return [];
+  const data = await polyFetch(
+    `/v2/snapshot/locale/us/markets/stocks/tickers?tickers=${tickers.join(",")}`
+  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data.tickers ?? []).map((t: any) => ({
+    ticker: t.ticker,
+    price: t.day?.c ?? t.lastTrade?.p ?? 0,
+    change: t.todaysChange ?? 0,
+    changePct: t.todaysChangePerc ?? 0,
+    volume: t.day?.v ?? 0,
+    timestamp: t.updated ?? Date.now(),
+  }));
+}
+
+export async function getAggregates(
+  ticker: string,
+  multiplier: number,
+  timespan: string,
+  from: string,
+  to: string
+) {
+  return polyFetch(
+    `/v2/aggs/ticker/${ticker}/range/${multiplier}/${timespan}/${from}/${to}?adjusted=true&sort=asc&limit=500`
+  );
+}
+
+export async function getTickerDetails(ticker: string) {
+  return polyFetch(`/v3/reference/tickers/${ticker}`);
+}
+
+export async function getNews(tickers: string[], limit = 20) {
+  const tickerParam = tickers.map((t) => `ticker=${t}`).join("&");
+  return polyFetch(`/v2/reference/news?${tickerParam}&limit=${limit}&order=desc&sort=published_utc`);
+}
+
+export async function getFinancials(ticker: string) {
+  return polyFetch(`/vX/reference/financials?ticker=${ticker}&timeframe=annual&limit=4`);
+}
+
+export async function getOptionsSnapshot(ticker: string) {
+  return polyFetch(`/v3/snapshot/options/${ticker}?limit=250`);
+}
+
+export async function getMarketSnapshot() {
+  // SPY + major sector ETFs for macro context
+  const etfs = ["SPY", "QQQ", "IWM", "XLK", "XLF", "XLV", "XLE", "XLY", "XLI", "XLP"];
+  return getSnapshots(etfs);
+}

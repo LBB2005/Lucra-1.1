@@ -1,0 +1,75 @@
+import { anthropic, MODEL } from "@/lib/anthropic";
+import { getMarketSnapshot, getMarketNews } from "@/lib/finnhub";
+import { perplexitySearch } from "@/lib/perplexity";
+
+export async function runMacroAgent(input: unknown): Promise<string> {
+  const { sectors = [] } = input as { sectors?: string[] };
+
+  let marketData = "Market data unavailable.";
+  let newsData = "News unavailable.";
+  let perplexityContext = "";
+
+  if (process.env.FINNHUB_API_KEY) {
+    try {
+      const [snapshots, news] = await Promise.all([
+        getMarketSnapshot(),
+        getMarketNews("general"),
+      ]);
+
+      marketData = JSON.stringify(
+        snapshots.map((s) => ({
+          ticker: s.ticker,
+          price: s.price,
+          change: `${s.change > 0 ? "+" : ""}${s.changePct.toFixed(2)}%`,
+        })),
+        null,
+        2
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      newsData = (news ?? []).slice(0, 8).map((n: any) => n.headline).join("\n");
+    } catch { /* skip */ }
+  }
+
+  // Perplexity for deep macro research
+  if (process.env.PERPLEXITY_API_KEY) {
+    const sectorNote = sectors.length ? ` with focus on ${sectors.join(", ")} sectors` : "";
+    try {
+      perplexityContext = await perplexitySearch(
+        `Current macroeconomic environment analysis${sectorNote}: Fed policy, inflation trends, interest rates, GDP outlook, sector rotation, and key risks for equity investors right now.`
+      );
+    } catch { /* skip */ }
+  }
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 2500,
+    thinking: { type: "enabled", budget_tokens: 8000 },
+    messages: [
+      {
+        role: "user",
+        content: `Analyze the current macro and market environment.${sectors.length ? ` Portfolio sectors: ${sectors.join(", ")}.` : ""}
+
+Market snapshot (SPY, QQQ, IWM, sector ETFs):
+${marketData}
+
+Recent market headlines:
+${newsData}
+
+${perplexityContext ? `Deep macro research (Perplexity):\n${perplexityContext}` : ""}
+
+Provide:
+1. Overall market regime (risk-on/off, bull/bear)
+2. Sector rotation analysis — leaders vs laggards
+3. Key macro themes (Fed, rates, inflation, earnings cycle)
+4. Implications for portfolio positioning
+5. Near-term risks to watch
+
+Be analytical and reference specific data points.`,
+      },
+    ],
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  return textBlock ? (textBlock as { type: string; text: string }).text : "Macro analysis unavailable.";
+}

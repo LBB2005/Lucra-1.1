@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Holding {
+  id          String   @id @default(cuid())
+  ticker      String   @unique
+  companyName String?
+  shares      Float
+  avgCost     Float
+  sector      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("holdings")
+}
+
+model PortfolioSettings {
+  id           String   @id @default("default")
+  cashBalance  Float    @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@map("portfolio_settings")
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  title     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+  mode           String       @default("simple")
+  agentTrace     String?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
