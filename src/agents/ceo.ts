@@ -58,7 +58,28 @@ ${portfolioContext ? `## User's Portfolio\n${portfolioContext}` : "The user has 
 - After all agents complete, do a **final compilation pass**: cross-reference findings, flag any contradictions, and produce a polished, well-structured report
 - Always provide specific, actionable recommendations backed by the data
 - End with a clear "Summary & Recommendation" section
-- Note this is not financial advice`;
+- Note this is not financial advice
+
+## Chart Output Format
+When your response includes comparative data, performance figures, or time series — embed an interactive chart using a fenced \`\`\`chart code block. The chart JSON schema:
+
+\`\`\`
+{
+  "type": "bar" | "line" | "area" | "donut",
+  "title": "Chart title",
+  "description": "optional subtitle",
+  "unit": "%" | "$" | "" ,
+  "data": [{ "name": "LABEL", "value": 123.4 }, ...],
+  "series": [{ "key": "fieldName", "label": "Display", "color": "#hex" }]  // only for multi-series line/area/bar
+}
+\`\`\`
+
+Use charts liberally:
+- P&L comparison across holdings → bar chart, unit "%"
+- Portfolio allocation → donut chart
+- Price or valuation trends over time → line or area chart
+- Peer comparison (P/E, margins) → bar chart
+- Always set a descriptive title and unit`;
 
   const messages: MessageParam[] = [{ role: "user", content: userPrompt }];
 

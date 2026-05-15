@@ -3,6 +3,7 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
+import ChartBlock from "./ChartBlock";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -37,7 +38,7 @@ const components: Components = {
     </td>
   ),
 
-  // Code blocks — dark with language badge + copy button
+  // Code blocks — chart fence or dark code block with language badge + copy
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   code: ({ className, children, ...props }: any) => {
     const isBlock = !!className;
@@ -50,6 +51,11 @@ const components: Components = {
           {children}
         </code>
       );
+    }
+
+    // Chart blocks render as interactive Recharts visualisations
+    if (lang === "chart") {
+      return <ChartBlock raw={code} />;
     }
 
     return (
