@@ -1,0 +1,116 @@
+"use client";
+import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { Components } from "react-markdown";
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); }}
+      className="text-[11px] font-medium px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 transition-colors duration-150 text-slate-300 hover:text-white"
+    >
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+}
+
+const components: Components = {
+  // Tables — scrollable container + clean styling
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-4 rounded-xl border border-[var(--color-border)] shadow-sm">
+      <table className="w-full text-sm border-collapse">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="bg-[var(--color-accent-light)]">{children}</thead>,
+  tbody: ({ children }) => <tbody className="divide-y divide-[var(--color-border)]">{children}</tbody>,
+  tr: ({ children }) => <tr className="hover:bg-[var(--color-surface)] transition-colors duration-100">{children}</tr>,
+  th: ({ children }) => (
+    <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--color-accent)] whitespace-nowrap border-b border-[var(--color-border)]">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="px-4 py-2.5 text-[13px] text-[var(--color-text)] align-top">
+      {children}
+    </td>
+  ),
+
+  // Code blocks — dark with language badge + copy button
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  code: ({ className, children, ...props }: any) => {
+    const isBlock = !!className;
+    const lang = className?.replace("language-", "") ?? "";
+    const code = String(children).replace(/\n$/, "");
+
+    if (!isBlock) {
+      return (
+        <code className="bg-[var(--color-accent-light)] text-[var(--color-accent)] px-1.5 py-0.5 rounded-md text-[0.82em] font-mono">
+          {children}
+        </code>
+      );
+    }
+
+    return (
+      <div className="my-4 rounded-xl overflow-hidden border border-slate-700 shadow-md">
+        <div className="flex items-center justify-between bg-[#1e2d3d] px-4 py-2">
+          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{lang || "code"}</span>
+          <CopyButton text={code} />
+        </div>
+        <pre className="bg-[#0f1e2e] text-slate-200 px-4 py-3.5 overflow-x-auto text-[0.82em] leading-relaxed font-mono">
+          <code {...props}>{children}</code>
+        </pre>
+      </div>
+    );
+  },
+
+  // Headings — clear hierarchy
+  h1: ({ children }) => <h1 className="text-[1.15rem] font-bold text-[var(--color-text)] mt-6 mb-2 pb-1.5 border-b border-[var(--color-border)]">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-[1.05rem] font-semibold text-[var(--color-text)] mt-5 mb-2">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-[0.95rem] font-semibold text-[var(--color-text-secondary)] mt-4 mb-1.5">{children}</h3>,
+
+  // Lists
+  ul: ({ children }) => <ul className="list-disc pl-5 my-2 space-y-1 text-[var(--color-text)]">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 my-2 space-y-1 text-[var(--color-text)]">{children}</ol>,
+  li: ({ children }) => <li className="text-[0.9rem] leading-relaxed">{children}</li>,
+
+  // Paragraphs
+  p: ({ children }) => <p className="text-[0.9rem] leading-[1.75] mb-3 last:mb-0 text-[var(--color-text)]">{children}</p>,
+
+  // Inline text
+  strong: ({ children }) => <strong className="font-semibold text-[var(--color-text)]">{children}</strong>,
+  em: ({ children }) => <em className="italic text-[var(--color-text-secondary)]">{children}</em>,
+
+  // Blockquote — callout style
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-4 border-[var(--color-accent-medium)] bg-[var(--color-accent-light)] rounded-r-xl pl-4 pr-3 py-2.5 my-3 text-[var(--color-text-secondary)] text-[0.9rem]">
+      {children}
+    </blockquote>
+  ),
+
+  // Links
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--color-accent)] underline underline-offset-2 hover:opacity-75 transition-opacity">
+      {children}
+    </a>
+  ),
+
+  // Horizontal rule
+  hr: () => <hr className="my-4 border-none border-t border-[var(--color-border)]" />,
+};
+
+interface Props {
+  children: string;
+  className?: string;
+}
+
+export default function Markdown({ children, className = "" }: Props) {
+  return (
+    <div className={`markdown-body ${className}`}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {children}
+      </ReactMarkdown>
+    </div>
+  );
+}

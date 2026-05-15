@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
+import Markdown from "./Markdown";
 import { AGENT_LABELS } from "@/types/chat";
 import type { ChatMessage, AgentStep } from "@/types/chat";
 
@@ -116,7 +116,7 @@ export default function Message({ message }: { message: ChatMessage }) {
   if (isUser) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[78%] bg-[var(--color-user-bubble)] text-white rounded-2xl rounded-tr-md px-4 py-3 text-sm leading-relaxed shadow-sm">
+        <div className="max-w-[78%] bg-[var(--color-user-bubble)] text-white rounded-2xl rounded-tr-sm px-4 py-3 text-[0.9rem] leading-relaxed shadow-md shadow-blue-900/15">
           {message.content}
         </div>
       </div>
@@ -124,23 +124,23 @@ export default function Message({ message }: { message: ChatMessage }) {
   }
 
   return (
-    <div className="flex gap-3 group">
+    <div className="flex gap-3.5 group">
       <LucraIcon size={28} />
       <div className="flex-1 min-w-0 pt-0.5">
-        <div className="prose-msg text-sm text-[var(--color-text)]">
-          <ReactMarkdown>{message.content}</ReactMarkdown>
-        </div>
+        <Markdown>{message.content}</Markdown>
         {message.agentTrace && message.agentTrace.length > 0 && (
           <AgentTrace steps={message.agentTrace} />
         )}
-        <span className="text-[11px] text-[var(--color-muted)] opacity-0 group-hover:opacity-100 transition-opacity mt-1 inline-block">
-          {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          <span className="text-[11px] text-[var(--color-muted)]">
+            {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
           {message.mode === "agent" && (
-            <span className="ml-2 bg-[var(--color-accent-light)] text-[var(--color-accent)] px-1.5 py-0.5 rounded-full text-[10px] font-medium">
-              agent
+            <span className="bg-[var(--color-accent-light)] text-[var(--color-accent)] px-1.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wide">
+              AGENT
             </span>
           )}
-        </span>
+        </div>
       </div>
     </div>
   );

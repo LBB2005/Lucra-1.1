@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
+import Markdown from "./Markdown";
 import Message from "./Message";
 import TypingIndicator from "./TypingIndicator";
 import { AGENT_LABELS } from "@/types/chat";
@@ -146,7 +146,7 @@ export default function MessageList({ messages, isStreaming, streamingContent, m
           <div className="flex gap-3">
             <LucraIcon />
             <div className="flex-1 min-w-0 pt-0.5 prose-msg text-sm text-[var(--color-text)]">
-              <ReactMarkdown>{streamingContent}</ReactMarkdown>
+              <Markdown>{streamingContent}</Markdown>
               <span className="inline-block w-0.5 h-[1.1em] bg-[var(--color-accent)] animate-pulse align-text-bottom ml-0.5" />
             </div>
           </div>
@@ -157,7 +157,7 @@ export default function MessageList({ messages, isStreaming, streamingContent, m
           <div className="flex gap-3">
             <LucraIcon />
             <div className="flex-1 min-w-0 pt-0.5 prose-msg text-sm text-[var(--color-text)]">
-              <ReactMarkdown>{streamingContent}</ReactMarkdown>
+              <Markdown>{streamingContent}</Markdown>
               <span className="inline-block w-0.5 h-[1.1em] bg-[var(--color-accent)] animate-pulse align-text-bottom ml-0.5" />
             </div>
           </div>

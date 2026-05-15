@@ -62,7 +62,7 @@ export async function runRiskAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 2500,
+    max_tokens: 10000,
     thinking: { type: "enabled", budget_tokens: 8000 },
     messages: [
       {
