@@ -43,12 +43,12 @@ function AgentActivityInline({ steps, ceoThinking }: { steps: AgentStep[]; ceoTh
     <div className="flex gap-3">
       <LucraIcon />
       <div className="flex-1 min-w-0 pt-0.5">
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden shadow-sm">
 
           {/* Header bar */}
-          <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-[var(--color-border)] bg-white">
+          <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-slate-200 bg-white">
             <Spinner size={13} />
-            <span className="text-xs font-semibold text-[var(--color-text)]">
+            <span className="text-xs font-semibold text-slate-700">
               {!hasSteps
                 ? "Deploying agents…"
                 : isCompiling
@@ -59,7 +59,7 @@ function AgentActivityInline({ steps, ceoThinking }: { steps: AgentStep[]; ceoTh
               }
             </span>
             {hasSteps && (
-              <span className="ml-auto text-[11px] text-[var(--color-muted)]">
+              <span className="ml-auto text-[11px] text-slate-400">
                 {doneCount}/{steps.length}
               </span>
             )}
@@ -67,11 +67,11 @@ function AgentActivityInline({ steps, ceoThinking }: { steps: AgentStep[]; ceoTh
 
           {/* No steps yet — initialising skeleton */}
           {!hasSteps && (
-            <div className="px-4 py-3 flex flex-col gap-2">
+            <div className="px-4 py-3 flex flex-col gap-2.5">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="flex items-center gap-2.5 animate-pulse">
-                  <span className="w-3 h-3 rounded-full bg-slate-200 flex-shrink-0" />
-                  <span className="h-2.5 rounded bg-slate-200" style={{ width: `${55 + i * 18}px` }} />
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-300 flex-shrink-0" />
+                  <span className="h-2.5 rounded-full bg-slate-300" style={{ width: `${60 + i * 22}px` }} />
                 </div>
               ))}
             </div>
@@ -79,7 +79,7 @@ function AgentActivityInline({ steps, ceoThinking }: { steps: AgentStep[]; ceoTh
 
           {/* Step rows */}
           {hasSteps && (
-            <div className="px-4 py-3 flex flex-col gap-0">
+            <div className="px-4 py-2 flex flex-col gap-0">
               {steps.map((step, i) => {
                 const label = step.agent === "skeptic_review"
                   ? "🔍 Second Opinion"
@@ -115,7 +115,7 @@ function AgentActivityInline({ steps, ceoThinking }: { steps: AgentStep[]; ceoTh
                       {label}
                     </span>
                     {step.status === "running" && (
-                      <span className="text-[11px] text-[var(--color-muted)] italic">Analyzing…</span>
+                      <span className="text-[11px] text-slate-400 italic">Analyzing…</span>
                     )}
                     {step.status === "error" && step.error && (
                       <span className="text-[11px] text-red-400 truncate max-w-[160px]">{step.error}</span>
@@ -128,13 +128,13 @@ function AgentActivityInline({ steps, ceoThinking }: { steps: AgentStep[]; ceoTh
 
           {/* Compiling footer */}
           {isCompiling && (
-            <div className="px-4 pb-3 flex items-center gap-2">
+            <div className="px-4 py-2.5 border-t border-slate-200 flex items-center gap-2">
               <span className="flex gap-1">
                 {[0, 1, 2].map(i => (
                   <span key={i} className="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]" style={{ animationDelay: `${i * 160}ms` }} />
                 ))}
               </span>
-              <span className="text-[11px] text-[var(--color-muted)] italic">Writing your report…</span>
+              <span className="text-[11px] text-slate-500 italic">Writing your report…</span>
             </div>
           )}
         </div>
@@ -162,7 +162,7 @@ export default function MessageList({ messages, isStreaming, streamingContent, m
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, streamingContent, agentSteps.length, ceoThinking]);
+  }, [messages.length, streamingContent, agentSteps.length, ceoThinking, isStreaming]);
 
   if (!messages.length && !isStreaming) {
     return (
