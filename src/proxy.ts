@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
-export default auth((req) => {
+export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
 
@@ -16,7 +16,7 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  // Login page: redirect to home if already signed in
+  // Login page: redirect home if already signed in
   if (pathname === "/login") {
     if (isLoggedIn) return NextResponse.redirect(new URL("/", req.url));
     return NextResponse.next();
@@ -34,13 +34,6 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    /*
-     * Match all paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico, robots.txt, sitemap.xml
-     * - public folder files
-     */
     "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
   ],
 };
