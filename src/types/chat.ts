@@ -7,6 +7,7 @@ export interface ChatMessage {
   mode: ChatMode;
   createdAt: string;
   agentTrace?: AgentStep[];
+  critique?: string;
 }
 
 export type AgentName =
@@ -19,7 +20,11 @@ export type AgentName =
   | "insider_agent"
   | "sentiment_agent"
   | "competitor_agent"
-  | "options_agent";
+  | "options_agent"
+  | "run_comparables_agent"
+  | "run_graham_agent"
+  | "run_analyst_agent"
+  | "skeptic_review";
 
 export const AGENT_LABELS: Record<AgentName, string> = {
   risk_agent: "Risk Analysis",
@@ -32,6 +37,10 @@ export const AGENT_LABELS: Record<AgentName, string> = {
   sentiment_agent: "Social Sentiment",
   competitor_agent: "Competitor Analysis",
   options_agent: "Options Flow",
+  run_comparables_agent: "Comparables",
+  run_graham_agent: "Graham Screen",
+  run_analyst_agent: "Analyst Consensus",
+  skeptic_review: "Skeptic Review",
 };
 
 export type AgentStatus = "pending" | "running" | "complete" | "error";
@@ -50,6 +59,8 @@ export type AgentEvent =
   | { type: "ceo_thinking"; content: string }
   | { type: "ceo_compiling" }
   | { type: "final_response"; content: string }
+  | { type: "skeptic_start" }
+  | { type: "skeptic_complete"; critique: string }
   | { type: "text_delta"; content: string }
   | { type: "done" }
   | { type: "error"; message: string };

@@ -94,6 +94,11 @@ export async function getRecommendationTrends(ticker: string) {
   return fhFetch(`/stock/recommendation?symbol=${ticker}`);
 }
 
+// Analyst price targets
+export async function getPriceTarget(ticker: string) {
+  return fhFetch(`/stock/price-target?symbol=${ticker}`);
+}
+
 // Company profile
 export async function getCompanyProfile(ticker: string) {
   return fhFetch(`/stock/profile2?symbol=${ticker}`);

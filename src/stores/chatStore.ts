@@ -10,9 +10,11 @@ interface ChatState {
   streamingContent: string;
   agentSteps: AgentStep[];
   ceoThinking: string;
+  pendingCritique: string;
 
   pendingMessage: string;
   setPendingMessage: (msg: string) => void;
+  setPendingCritique: (c: string) => void;
   setConversationId: (id: string | null) => void;
   setMode: (mode: ChatMode) => void;
   addMessage: (msg: ChatMessage) => void;
@@ -30,6 +32,8 @@ interface ChatState {
 export const useChatStore = create<ChatState>((set) => ({
   pendingMessage: "",
   setPendingMessage: (msg) => set({ pendingMessage: msg }),
+  pendingCritique: "",
+  setPendingCritique: (c) => set({ pendingCritique: c }),
   conversationId: null,
   messages: [],
   mode: "simple",
@@ -63,5 +67,6 @@ export const useChatStore = create<ChatState>((set) => ({
       streamingContent: "",
       agentSteps: [],
       ceoThinking: "",
+      pendingCritique: "",
     }),
 }));

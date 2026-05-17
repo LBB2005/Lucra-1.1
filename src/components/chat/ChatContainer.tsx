@@ -42,6 +42,7 @@ export default function ChatContainer() {
     setConversationId,
     pendingMessage,
     setPendingMessage,
+    setPendingCritique,
   } = useChatStore();
 
   const { holdings, cashBalance } = usePortfolio();
@@ -187,6 +188,7 @@ export default function ChatContainer() {
 
       if (finalContent) {
         const completedSteps = useChatStore.getState().agentSteps;
+        const critique = useChatStore.getState().pendingCritique;
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
@@ -194,8 +196,11 @@ export default function ChatContainer() {
           mode: "agent",
           createdAt: new Date().toISOString(),
           agentTrace: completedSteps,
+          critique: critique || undefined,
         };
         addMessage(assistantMsg);
+        // Clear for next run
+        setPendingCritique("");
         await saveMessage(convId, "assistant", finalContent, completedSteps);
       }
     } finally {
@@ -228,6 +233,18 @@ export default function ChatContainer() {
         break;
       case "final_response":
         appendStreamChunk(event.content);
+        break;
+      case "skeptic_start": {
+        const skepticStep: AgentStep = { agent: "skeptic_review", status: "running" };
+        setAgentSteps([
+          ...useChatStore.getState().agentSteps,
+          skepticStep,
+        ]);
+        break;
+      }
+      case "skeptic_complete":
+        updateAgentStep("skeptic_review", { status: "complete", result: event.critique });
+        if (event.critique) setPendingCritique(event.critique);
         break;
     }
   }

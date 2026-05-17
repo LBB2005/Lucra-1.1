@@ -7,12 +7,13 @@ import type { AgentStep as AgentStepType } from "@/types/chat";
 export default function AgentStep({ step }: { step: AgentStepType }) {
   const [expanded, setExpanded] = useState(false);
   const label = AGENT_LABELS[step.agent] ?? step.agent;
+  const isSkeptic = step.agent === "skeptic_review";
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className={`flex flex-col gap-1 ${isSkeptic ? "mt-1 pt-2 border-t border-amber-200/60" : ""}`}>
       <div className="flex items-center gap-2">
         {step.status === "running" && (
-          <span className="text-[var(--color-accent)]">
+          <span className={isSkeptic ? "text-amber-500" : "text-[var(--color-accent)]"}>
             <Spinner size={14} />
           </span>
         )}
@@ -37,15 +38,15 @@ export default function AgentStep({ step }: { step: AgentStepType }) {
         <span
           className={`text-xs font-medium ${
             step.status === "running"
-              ? "text-[var(--color-accent)]"
+              ? isSkeptic ? "text-amber-600" : "text-[var(--color-accent)]"
               : step.status === "complete"
-              ? "text-[var(--color-text)]"
+              ? isSkeptic ? "text-amber-700" : "text-[var(--color-text)]"
               : step.status === "error"
               ? "text-red-400"
               : "text-[var(--color-muted)]"
           }`}
         >
-          {label}
+          {isSkeptic && "🔍 "}{label}
         </span>
 
         {step.status === "running" && (

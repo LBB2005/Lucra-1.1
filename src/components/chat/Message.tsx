@@ -131,6 +131,19 @@ export default function Message({ message }: { message: ChatMessage }) {
         {message.agentTrace && message.agentTrace.length > 0 && (
           <AgentTrace steps={message.agentTrace} />
         )}
+        {message.critique && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-amber-600 flex-shrink-0">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide">Second Opinion</span>
+            </div>
+            <Markdown className="text-amber-900 [&_p]:text-amber-900 [&_li]:text-amber-900 [&_strong]:text-amber-800">
+              {message.critique}
+            </Markdown>
+          </div>
+        )}
         <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
           <span className="text-[11px] text-[var(--color-muted)]">
             {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

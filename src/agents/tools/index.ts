@@ -131,4 +131,43 @@ export const agentTools: Anthropic.Tool[] = [
       required: ["tickers"],
     },
   },
+  {
+    name: "run_comparables_agent",
+    description:
+      "Benchmarks a stock's P/E, EV/EBITDA, P/S, P/B, and FCF Yield against same-sector peers. Use for relative valuation questions.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        ticker: { type: "string", description: "Primary ticker to benchmark" },
+        peers: { type: "array", items: { type: "string" }, description: "Peer tickers (optional — agent will identify peers if omitted)" },
+      },
+      required: ["ticker"],
+    },
+  },
+  {
+    name: "run_graham_agent",
+    description:
+      "Runs a full Benjamin Graham defensive value screen: Graham Number, margin of safety, P/E, P/B, debt, and current ratio checks with an overall pass/fail verdict. Use for value investing or 'is this stock cheap?' questions.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        ticker: { type: "string", description: "Ticker to screen" },
+      },
+      required: ["ticker"],
+    },
+  },
+  {
+    name: "run_analyst_agent",
+    description:
+      "Aggregates Wall Street analyst price targets and buy/hold/sell consensus ratings from Finnhub and Polygon. Use when the user asks about analyst opinions, price targets, or Wall Street sentiment.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        tickers: { type: "array", items: { type: "string" }, description: "Tickers to look up" },
+      },
+      required: ["tickers"],
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...({ cache_control: { type: "ephemeral" } } as any),
+  },
 ];

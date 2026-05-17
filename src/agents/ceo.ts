@@ -10,10 +10,26 @@ import { runInsiderAgent } from "./sub-agents/insider-agent";
 import { runSentimentAgent } from "./sub-agents/sentiment-agent";
 import { runCompetitorAgent } from "./sub-agents/competitor-agent";
 import { runOptionsAgent } from "./sub-agents/options-agent";
+import { runComparablesAgent } from "./sub-agents/comparables-agent";
+import { runGrahamAgent } from "./sub-agents/graham-agent";
+import { runAnalystAgent } from "./sub-agents/analyst-agent";
 import type { AgentEvent, AgentName } from "@/types/chat";
 import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 
 type EventEmitter = (event: AgentEvent) => void;
+
+// Deep agents run complex multi-step analysis — no timeout cap
+const DEEP_AGENTS = new Set(["run_dcf_agent", "run_insider_agent", "run_earnings_agent", "run_competitor_agent", "run_graham_agent"]);
+const STANDARD_TIMEOUT_MS = 60_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
 
 const agentDispatch: Record<string, (input: unknown) => Promise<string>> = {
   run_risk_agent: runRiskAgent,
@@ -26,7 +42,12 @@ const agentDispatch: Record<string, (input: unknown) => Promise<string>> = {
   run_sentiment_agent: runSentimentAgent,
   run_competitor_agent: runCompetitorAgent,
   run_options_agent: runOptionsAgent,
+  run_comparables_agent: runComparablesAgent,
+  run_graham_agent: runGrahamAgent,
+  run_analyst_agent: runAnalystAgent,
 };
+
+const SKEPTIC_MODEL = "claude-haiku-4-5-20251001";
 
 export async function runCeoAgent(
   userPrompt: string,
@@ -51,9 +72,13 @@ ${portfolioContext ? `## User's Portfolio\n${portfolioContext}` : "The user has 
 - **Sentiment Agent**: Social media sentiment (StockTwits, Reddit)
 - **Competitor Agent**: Peer comparison and competitive positioning
 - **Options Agent**: Options flow, put/call ratio, unusual activity
+- **Comparables Agent**: P/E, EV/EBITDA, P/S, P/B, FCF Yield vs peers
+- **Graham Screen Agent**: Benjamin Graham defensive value criteria scorecard
+- **Analyst Consensus Agent**: Wall Street price targets and buy/hold/sell ratings
 
 ## Instructions
 - Be decisive: deploy multiple agents when the question requires comprehensive analysis
+- **Prefer parallel tool calls**: when multiple agents are needed, call them in the same message so they run simultaneously
 - Don't call the same agent twice for the same data
 - After all agents complete, do a **final compilation pass**: cross-reference findings, flag any contradictions, and produce a polished, well-structured report
 - Always provide specific, actionable recommendations backed by the data
@@ -85,6 +110,9 @@ Use charts liberally:
 
   let iteration = 0;
   const MAX_ITERATIONS = 10;
+  // Accumulate sub-agent outputs for the skeptic pass
+  const agentOutputs = new Map<string, string>();
+  let finalResponse = "";
 
   while (iteration < MAX_ITERATIONS) {
     iteration++;
@@ -108,55 +136,111 @@ Use charts liberally:
     }
 
     if (response.stop_reason === "end_turn") {
-      const finalText = response.content
+      finalResponse = response.content
         .filter((b) => b.type === "text")
         .map((b) => (b as { type: string; text: string }).text)
         .join("\n\n");
-      emit({ type: "final_response", content: finalText });
+      emit({ type: "final_response", content: finalResponse });
       break;
     }
 
     if (response.stop_reason !== "tool_use") {
-      emit({ type: "final_response", content: "Analysis complete." });
+      finalResponse = "Analysis complete.";
+      emit({ type: "final_response", content: finalResponse });
       break;
     }
 
     messages.push({ role: "assistant", content: response.content });
 
-    const toolResults: ToolResultBlockParam[] = [];
+    // Extract all tool_use blocks and dispatch in parallel
+    const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
 
-    for (const block of response.content) {
-      if (block.type !== "tool_use") continue;
-
-      const agentName = block.name as AgentName;
-      emit({ type: "agent_start", agent: agentName });
-
-      try {
-        const handler = agentDispatch[block.name];
-        if (!handler) throw new Error(`Unknown agent: ${block.name}`);
-
-        const result = await handler(block.input);
-        emit({ type: "agent_complete", agent: agentName, result });
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: result,
-        });
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Unknown error";
-        emit({ type: "agent_error", agent: agentName, error: errorMsg });
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: `Error: ${errorMsg}`,
-          is_error: true,
-        });
-      }
+    // Emit starts for all agents in this batch
+    for (const block of toolUseBlocks) {
+      emit({ type: "agent_start", agent: block.name as AgentName });
     }
 
-    // Signal that the CEO is now compiling all reports before the next call
+    const toolResults: ToolResultBlockParam[] = await Promise.all(
+      toolUseBlocks.map(async (block) => {
+        if (block.type !== "tool_use") {
+          return null as unknown as ToolResultBlockParam;
+        }
+        const agentName = block.name as AgentName;
+        try {
+          const handler = agentDispatch[block.name];
+          if (!handler) throw new Error(`Unknown agent: ${block.name}`);
+
+          const run = handler(block.input);
+          const result = DEEP_AGENTS.has(block.name)
+            ? await run
+            : await withTimeout(run, STANDARD_TIMEOUT_MS, block.name);
+
+          agentOutputs.set(block.name, result);
+          emit({ type: "agent_complete", agent: agentName, result });
+          return {
+            type: "tool_result" as const,
+            tool_use_id: block.id,
+            content: result,
+          };
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : "Unknown error";
+          emit({ type: "agent_error", agent: agentName, error: errorMsg });
+          return {
+            type: "tool_result" as const,
+            tool_use_id: block.id,
+            content: `Error: ${errorMsg}`,
+            is_error: true,
+          };
+        }
+      })
+    );
+
     emit({ type: "ceo_compiling" });
     messages.push({ role: "user", content: toolResults });
+  }
+
+  // ── Skeptic validation pass ──────────────────────────────────────────────
+  if (finalResponse) {
+    emit({ type: "skeptic_start" });
+
+    const agentSummaryLines = Array.from(agentOutputs.entries())
+      .map(([name, output]) => `### ${name}\n${output.slice(0, 800)}${output.length > 800 ? "…" : ""}`)
+      .join("\n\n");
+
+    try {
+      const skepticResponse = await anthropic.messages.create({
+        model: SKEPTIC_MODEL,
+        max_tokens: 600,
+        messages: [
+          {
+            role: "user",
+            content: `You are a skeptical financial analyst reviewing another analyst's research report. Your job is to identify weaknesses, flag overconfidence, and note any contradictions or missing context.
+
+## CEO Report
+${finalResponse.slice(0, 3000)}${finalResponse.length > 3000 ? "\n[truncated]" : ""}
+
+## Sub-Agent Raw Outputs
+${agentSummaryLines || "No sub-agent data collected."}
+
+## Your Task
+Write a concise second-opinion critique (3–5 bullet points, max 150 words). Focus on:
+- Any claims that lack data support or are over-stated
+- Contradictions between sub-agents (e.g. bullish sentiment vs negative technicals)
+- Key risks or bearish factors the main report downplayed
+- Data gaps that would change the conclusion
+
+Be direct and constructive. Start with "**Skeptic Review:**"`,
+          },
+        ],
+      });
+
+      const critique =
+        skepticResponse.content.find((b) => b.type === "text")?.text ?? "";
+      emit({ type: "skeptic_complete", critique });
+    } catch {
+      // Skeptic is best-effort — don't fail the whole response
+      emit({ type: "skeptic_complete", critique: "" });
+    }
   }
 
   emit({ type: "done" });
