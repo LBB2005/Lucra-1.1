@@ -170,4 +170,32 @@ export const agentTools: Anthropic.Tool[] = [
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...({ cache_control: { type: "ephemeral" } } as any),
   },
+  {
+    name: "run_hype_agent",
+    description:
+      "Searches Reddit, X/Twitter, news, and YouTube (via Perplexity AI) to measure narrative momentum and retail hype for a ticker. Returns a 0–10 hype score with evidence. Use when the user asks about hype, narrative, social momentum, AI buzz, or retail sentiment for a specific stock.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        ticker: { type: "string", description: "Ticker symbol to analyze" },
+        companyName: { type: "string", description: "Company name (improves search quality)" },
+      },
+      required: ["ticker"],
+    },
+  },
+  {
+    name: "run_fundamentals_agent",
+    description:
+      "Builds a 3–5 year time series of revenue, earnings, margins, FCF, and balance sheet metrics from SEC EDGAR XBRL and Finnhub. Use when the user asks about multi-year trends, revenue growth trajectory, earnings quality, or long-term fundamental health.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        ticker: { type: "string", description: "Ticker symbol" },
+        years: { type: "number", description: "Number of years of history to retrieve (default 5, max 10)" },
+      },
+      required: ["ticker"],
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...({ cache_control: { type: "ephemeral" } } as any),
+  },
 ];

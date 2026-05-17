@@ -76,27 +76,38 @@ export default function ChatContainer() {
   const handleSend = useCallback(
     async (text: string) => {
       if (isStreaming) return;
+      console.log("[handleSend] mode:", mode, "text:", text.slice(0, 40));
 
-      const convId = await ensureConversation();
-      const portfolioContext = buildPortfolioContext(holdings, cashBalance);
+      try {
+        const convId = await ensureConversation();
+        const portfolioContext = buildPortfolioContext(holdings, cashBalance);
 
-      const userMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text,
-        mode,
-        createdAt: new Date().toISOString(),
-      };
-      addMessage(userMsg);
-      await saveMessage(convId, "user", text);
+        const userMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: text,
+          mode,
+          createdAt: new Date().toISOString(),
+        };
+        addMessage(userMsg);
 
-      setStreaming(true);
-      clearStreamingContent();
+        // Save message best-effort — don't let a DB error block the response
+        saveMessage(convId, "user", text).catch((e) =>
+          console.warn("[handleSend] saveMessage failed:", e)
+        );
 
-      if (mode === "simple") {
-        await runSimpleChat(text, portfolioContext, convId);
-      } else {
-        await runAgentMode(text, portfolioContext, convId);
+        setStreaming(true);
+        clearStreamingContent();
+
+        if (mode === "simple") {
+          await runSimpleChat(text, portfolioContext, convId);
+        } else {
+          await runAgentMode(text, portfolioContext, convId);
+        }
+      } catch (err) {
+        console.error("[handleSend] top-level error:", err);
+        setStreaming(false);
+        clearStreamingContent();
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,6 +256,10 @@ export default function ChatContainer() {
       case "skeptic_complete":
         updateAgentStep("skeptic_review", { status: "complete", result: event.critique });
         if (event.critique) setPendingCritique(event.critique);
+        break;
+      case "error":
+        console.error("[agent error event]", event.message);
+        appendStreamChunk(`\n\n**Error:** ${event.message}`);
         break;
     }
   }

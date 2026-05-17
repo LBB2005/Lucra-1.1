@@ -24,6 +24,8 @@ export type AgentName =
   | "run_comparables_agent"
   | "run_graham_agent"
   | "run_analyst_agent"
+  | "run_hype_agent"
+  | "run_fundamentals_agent"
   | "skeptic_review";
 
 export const AGENT_LABELS: Record<AgentName, string> = {
@@ -40,6 +42,8 @@ export const AGENT_LABELS: Record<AgentName, string> = {
   run_comparables_agent: "Comparables",
   run_graham_agent: "Graham Screen",
   run_analyst_agent: "Analyst Consensus",
+  run_hype_agent: "🔥 Hype Score",
+  run_fundamentals_agent: "Multi-Year Fundamentals",
   skeptic_review: "Skeptic Review",
 };
 

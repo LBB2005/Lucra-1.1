@@ -19,6 +19,7 @@ export async function POST(req: Request) {
         await runCeoAgent(userPrompt, portfolioContext ?? "", emit);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
+        console.error("[agent route error]", err);
         emit({ type: "error", message: msg });
       } finally {
         controller.close();

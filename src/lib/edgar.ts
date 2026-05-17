@@ -10,22 +10,39 @@ async function edgarFetch(url: string) {
   return res.json();
 }
 
-// Resolve ticker → CIK using EDGAR company search
-export async function getCikByTicker(ticker: string): Promise<string | null> {
+// In-memory CIK cache — loaded once from SEC's static company tickers file
+let CIK_CACHE: Record<string, string> | null = null;
+
+async function getCikMap(): Promise<Record<string, string>> {
+  if (CIK_CACHE) return CIK_CACHE;
   try {
-    const res = await fetch(
-      `https://efts.sec.gov/LATEST/search-index?q=%22${ticker}%22&dateRange=custom&startdt=2020-01-01&forms=10-K`,
-      { headers: { "User-Agent": USER_AGENT } }
-    );
-    if (!res.ok) return null;
+    const res = await fetch("https://www.sec.gov/files/company_tickers.json", {
+      headers: { "User-Agent": USER_AGENT },
+      next: { revalidate: 86400 }, // refresh daily
+    });
+    if (!res.ok) throw new Error(`company_tickers.json ${res.status}`);
     const data = await res.json();
-    const hit = data.hits?.hits?.[0];
-    if (!hit) return null;
-    return hit._source?.entity_id ?? null;
-  } catch {
-    return null;
+    // { "0": { cik_str: 320193, ticker: "AAPL", title: "Apple Inc." }, ... }
+    const map: Record<string, string> = {};
+    for (const entry of Object.values(data) as Array<{ cik_str: number; ticker: string }>) {
+      map[entry.ticker.toUpperCase()] = String(entry.cik_str).padStart(10, "0");
+    }
+    CIK_CACHE = map;
+    return map;
+  } catch (err) {
+    console.error("[edgar] Failed to load company tickers:", err);
+    return {};
   }
 }
+
+// Resolve ticker → zero-padded 10-digit CIK string
+export async function getCikByTicker(ticker: string): Promise<string | null> {
+  const map = await getCikMap();
+  return map[ticker.toUpperCase()] ?? null;
+}
+
+// Alias used by some modules
+export const lookupCik = getCikByTicker;
 
 export async function getCompanyFacts(cik: string) {
   const padded = cik.toString().padStart(10, "0");
@@ -37,23 +54,130 @@ export async function getRecentFilings(cik: string) {
   return edgarFetch(`${EDGAR_BASE}/submissions/CIK${padded}.json`);
 }
 
-// Extract key financial metrics from company facts
+// Extract most-recent single value for a GAAP key
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function pickLatestAnnual(us: any, key: string): number | null {
+  const units = us[key]?.units?.USD ?? us[key]?.units?.shares ?? [];
+  const annual = units.filter((u: { form: string }) => u.form === "10-K");
+  return annual.at(-1)?.val ?? null;
+}
+
+// Extract key financial metrics from company facts (single period — used by DCF agent)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function extractFinancialMetrics(facts: any) {
   const us = facts?.facts?.["us-gaap"] ?? {};
-  const pick = (key: string) => {
-    const units = us[key]?.units?.USD ?? us[key]?.units?.shares ?? [];
-    // Get most recent annual value
-    const annual = units.filter((u: { form: string }) => u.form === "10-K");
-    return annual.at(-1)?.val ?? null;
+  return {
+    revenue: pickLatestAnnual(us, "Revenues") ?? pickLatestAnnual(us, "RevenueFromContractWithCustomerExcludingAssessedTax"),
+    netIncome: pickLatestAnnual(us, "NetIncomeLoss"),
+    totalAssets: pickLatestAnnual(us, "Assets"),
+    totalDebt: pickLatestAnnual(us, "LongTermDebt"),
+    freeCashFlow: pickLatestAnnual(us, "NetCashProvidedByUsedInOperatingActivities"),
+    sharesOutstanding: pickLatestAnnual(us, "CommonStockSharesOutstanding"),
   };
+}
+
+// ── Multi-year time series ─────────────────────────────────────────────────────
+
+export interface YearlyMetric {
+  year: number;
+  value: number;
+}
+
+/**
+ * Extract a multi-year annual time series for a single GAAP concept.
+ * Returns entries deduplicated by fiscal year, sorted ascending.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractAnnualSeries(us: any, ...keys: string[]): YearlyMetric[] {
+  for (const key of keys) {
+    const units = us[key]?.units?.USD ?? us[key]?.units?.shares ?? [];
+    const annual: { end: string; val: number; form: string; filed: string }[] = units.filter(
+      (u: { form: string }) => u.form === "10-K"
+    );
+    if (!annual.length) continue;
+
+    // Deduplicate by fiscal year (use end date year), keep latest filing per year
+    const byYear = new Map<number, number>();
+    for (const entry of annual) {
+      const year = new Date(entry.end).getFullYear();
+      byYear.set(year, entry.val); // later entries overwrite earlier ones
+    }
+
+    return Array.from(byYear.entries())
+      .map(([year, value]) => ({ year, value }))
+      .sort((a, b) => a.year - b.year);
+  }
+  return [];
+}
+
+export interface FundamentalTimeSeries {
+  revenue: YearlyMetric[];
+  netIncome: YearlyMetric[];
+  operatingIncome: YearlyMetric[];
+  rAndD: YearlyMetric[];
+  operatingCashFlow: YearlyMetric[];
+  totalDebt: YearlyMetric[];
+  cash: YearlyMetric[];
+}
+
+/**
+ * Extract multi-year fundamental time series from EDGAR XBRL company facts.
+ * Trims to the most recent `years` annual data points.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function extractFundamentalTimeSeries(facts: any, years = 5): FundamentalTimeSeries {
+  const us = facts?.facts?.["us-gaap"] ?? {};
+  const trim = (arr: YearlyMetric[]) => arr.slice(-years);
 
   return {
-    revenue: pick("Revenues") ?? pick("RevenueFromContractWithCustomerExcludingAssessedTax"),
-    netIncome: pick("NetIncomeLoss"),
-    totalAssets: pick("Assets"),
-    totalDebt: pick("LongTermDebt"),
-    freeCashFlow: pick("NetCashProvidedByUsedInOperatingActivities"),
-    sharesOutstanding: pick("CommonStockSharesOutstanding"),
+    revenue: trim(extractAnnualSeries(us, "Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax")),
+    netIncome: trim(extractAnnualSeries(us, "NetIncomeLoss")),
+    operatingIncome: trim(extractAnnualSeries(us, "OperatingIncomeLoss")),
+    rAndD: trim(extractAnnualSeries(us, "ResearchAndDevelopmentExpense")),
+    operatingCashFlow: trim(extractAnnualSeries(us, "NetCashProvidedByUsedInOperatingActivities")),
+    totalDebt: trim(extractAnnualSeries(us, "LongTermDebt", "LongTermDebtNoncurrent")),
+    cash: trim(extractAnnualSeries(us, "CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsAndShortTermInvestments")),
   };
+}
+
+// ── EDGAR full-text search for Form 4 filings ─────────────────────────────────
+
+export interface Form4Filing {
+  entityName: string;
+  filedAt: string;
+  periodOfReport: string;
+  accessionNo: string;
+  cik: string;
+}
+
+/**
+ * Search EDGAR full-text search for recent Form 4 filings mentioning a ticker.
+ * Returns up to `limit` results filed within the last `daysBack` days.
+ */
+export async function searchRecentForm4(ticker: string, daysBack = 3, limit = 10): Promise<Form4Filing[]> {
+  const today = new Date();
+  const from = new Date(today);
+  from.setDate(from.getDate() - daysBack);
+
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const url = `https://efts.sec.gov/LATEST/search-index?q=%22${encodeURIComponent(ticker)}%22&forms=4&dateRange=custom&startdt=${fmt(from)}&enddt=${fmt(today)}&hits.hits.total.value=true&hits.hits._source.period_of_report=true`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hits: any[] = data.hits?.hits ?? [];
+    return hits.slice(0, limit).map((hit) => ({
+      entityName: hit._source?.entity_name ?? "",
+      filedAt: hit._source?.file_date ?? "",
+      periodOfReport: hit._source?.period_of_report ?? "",
+      accessionNo: hit._id ?? "",
+      cik: hit._source?.entity_id ?? "",
+    }));
+  } catch {
+    return [];
+  }
 }

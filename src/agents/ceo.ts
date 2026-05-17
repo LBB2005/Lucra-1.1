@@ -13,13 +13,23 @@ import { runOptionsAgent } from "./sub-agents/options-agent";
 import { runComparablesAgent } from "./sub-agents/comparables-agent";
 import { runGrahamAgent } from "./sub-agents/graham-agent";
 import { runAnalystAgent } from "./sub-agents/analyst-agent";
+import { runHypeAgent } from "./sub-agents/hype-agent";
+import { runFundamentalsAgent } from "./sub-agents/fundamentals-agent";
 import type { AgentEvent, AgentName } from "@/types/chat";
 import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 
 type EventEmitter = (event: AgentEvent) => void;
 
-// Deep agents run complex multi-step analysis — no timeout cap
-const DEEP_AGENTS = new Set(["run_dcf_agent", "run_insider_agent", "run_earnings_agent", "run_competitor_agent", "run_graham_agent"]);
+// Deep agents run complex multi-step analysis or external APIs — no timeout cap
+const DEEP_AGENTS = new Set([
+  "run_dcf_agent",
+  "run_insider_agent",
+  "run_earnings_agent",
+  "run_competitor_agent",
+  "run_graham_agent",
+  "run_hype_agent",          // Perplexity can be slow with web search
+  "run_fundamentals_agent",  // EDGAR XBRL fetches can be large
+]);
 const STANDARD_TIMEOUT_MS = 60_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -45,6 +55,8 @@ const agentDispatch: Record<string, (input: unknown) => Promise<string>> = {
   run_comparables_agent: runComparablesAgent,
   run_graham_agent: runGrahamAgent,
   run_analyst_agent: runAnalystAgent,
+  run_hype_agent: runHypeAgent,
+  run_fundamentals_agent: runFundamentalsAgent,
 };
 
 const SKEPTIC_MODEL = "claude-haiku-4-5-20251001";
@@ -75,6 +87,8 @@ ${portfolioContext ? `## User's Portfolio\n${portfolioContext}` : "The user has 
 - **Comparables Agent**: P/E, EV/EBITDA, P/S, P/B, FCF Yield vs peers
 - **Graham Screen Agent**: Benjamin Graham defensive value criteria scorecard
 - **Analyst Consensus Agent**: Wall Street price targets and buy/hold/sell ratings
+- **Hype Score Agent**: Real-time narrative momentum across Reddit, X/Twitter, news, YouTube — returns 0–10 hype score with evidence
+- **Multi-Year Fundamentals Agent**: 3–5 year revenue, earnings, margin, and FCF trends from SEC EDGAR XBRL + Finnhub
 
 ## Instructions
 - Be decisive: deploy multiple agents when the question requires comprehensive analysis
@@ -106,6 +120,7 @@ Use charts liberally:
 - Peer comparison (P/E, margins) → bar chart
 - Always set a descriptive title and unit`;
 
+  console.log("[ceo] starting for prompt:", userPrompt.slice(0, 60));
   const messages: MessageParam[] = [{ role: "user", content: userPrompt }];
 
   let iteration = 0;

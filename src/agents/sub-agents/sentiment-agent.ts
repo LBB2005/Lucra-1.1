@@ -1,108 +1,163 @@
+/**
+ * Sentiment Agent v2
+ * Uses Perplexity's sonar-pro model as a multi-platform search proxy.
+ * No Reddit OAuth or X API keys required — Perplexity indexes Reddit, news,
+ * X/Twitter public posts, and more in real time.
+ *
+ * If STOCKTWITS_ACCESS_TOKEN is set, also fetches live StockTwits stream
+ * for a quantitative bullish/bearish signal to complement Perplexity's search.
+ */
+
 import { anthropic, MODEL } from "@/lib/anthropic";
 
+const PERPLEXITY_API = "https://api.perplexity.ai/chat/completions";
+
 async function fetchStockTwitsSentiment(ticker: string) {
+  const token = process.env.STOCKTWITS_ACCESS_TOKEN;
+  const headers: Record<string, string> = { "User-Agent": "Lucra App" };
+  if (token) headers["Authorization"] = `OAuth ${token}`;
+
   try {
     const res = await fetch(
       `https://api.stocktwits.com/api/2/streams/symbol/${ticker}.json`,
-      { headers: { "User-Agent": "Lucra App" } }
+      { headers }
     );
     if (!res.ok) return null;
     const data = await res.json();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const messages = (data.messages ?? []).slice(0, 20);
+    const messages = (data.messages ?? []).slice(0, 25);
     const bullish = messages.filter((m: any) => m.entities?.sentiment?.basic === "Bullish").length;
     const bearish = messages.filter((m: any) => m.entities?.sentiment?.basic === "Bearish").length;
+    const neutral = messages.length - bullish - bearish;
+    const total = messages.length;
+
     return {
-      total: messages.length,
+      total,
       bullish,
       bearish,
-      neutral: messages.length - bullish - bearish,
+      neutral,
+      bullishPct: total ? Math.round((bullish / total) * 100) : 0,
+      bearishPct: total ? Math.round((bearish / total) * 100) : 0,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      recentMessages: messages.slice(0, 5).map((m: any) => m.body?.slice(0, 100)),
+      topMessages: messages.slice(0, 5).map((m: any) => m.body?.slice(0, 120)),
     };
   } catch {
     return null;
   }
 }
 
-async function fetchRedditSentiment(ticker: string) {
-  const clientId = process.env.REDDIT_CLIENT_ID;
-  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
-  const userAgent = process.env.REDDIT_USER_AGENT ?? "lucra-app/1.0";
+async function fetchPerplexitySentiment(tickers: string[]): Promise<string> {
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+  if (!apiKey) return "Perplexity API key not configured.";
 
-  if (!clientId || !clientSecret) return null;
+  const tickerList = tickers.join(", ");
+
+  const userPrompt = `Search Reddit (r/wallstreetbets, r/stocks, r/investing, r/SecurityAnalysis), X/Twitter, financial news, and any other public forums for current social sentiment about these stocks: ${tickerList}.
+
+For EACH ticker, find and report:
+1. Top Reddit posts or threads (last 48 hours) — titles, upvotes if visible, subreddit
+2. Notable X/Twitter posts or trending discussions
+3. News headlines driving discussion
+4. Overall tone: strongly bullish / bullish / neutral / bearish / strongly bearish
+5. Any meme stock activity, short squeeze talk, or unusual retail interest
+6. Key themes or narratives being discussed (earnings anticipation, product news, macro fears, AI hype, etc.)
+
+Format your response with a clear section for each ticker.`;
 
   try {
-    // Get Reddit access token
-    const tokenRes = await fetch("https://www.reddit.com/api/v1/access_token", {
+    const res = await fetch(PERPLEXITY_API, {
       method: "POST",
       headers: {
-        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": userAgent,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
       },
-      body: "grant_type=client_credentials",
+      body: JSON.stringify({
+        model: "sonar-pro",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a financial sentiment analyst. Search for real, current social media and forum posts. Be specific — cite actual post titles and communities. Do not invent quotes or sentiment.",
+          },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 1500,
+        temperature: 0.1,
+        search_recency_filter: "day",
+        return_citations: true,
+      }),
     });
-    if (!tokenRes.ok) return null;
-    const { access_token } = await tokenRes.json();
 
-    const searchRes = await fetch(
-      `https://oauth.reddit.com/search?q=${ticker}&subreddit=wallstreetbets+stocks+investing&sort=new&limit=25&t=week`,
-      { headers: { Authorization: `Bearer ${access_token}`, "User-Agent": userAgent } }
-    );
-    if (!searchRes.ok) return null;
-    const searchData = await searchRes.json();
+    if (!res.ok) {
+      throw new Error(`Perplexity ${res.status}: ${await res.text().catch(() => res.statusText)}`);
+    }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const posts = (searchData.data?.children ?? []).map((p: any) => ({
-      title: p.data?.title?.slice(0, 100),
-      score: p.data?.score,
-      subreddit: p.data?.subreddit,
-    }));
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content ?? "";
+    const citations: string[] = data.citations ?? [];
+    const citationBlock =
+      citations.length > 0
+        ? `\n\nSources:\n${citations.slice(0, 6).map((c, i) => `[${i + 1}] ${c}`).join("\n")}`
+        : "";
 
-    return { posts: posts.slice(0, 10), totalFound: posts.length };
-  } catch {
-    return null;
+    return content + citationBlock;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    console.error("[sentiment-agent] Perplexity error:", msg);
+    return `Perplexity search unavailable: ${msg}`;
   }
 }
 
 export async function runSentimentAgent(input: unknown): Promise<string> {
   const { tickers } = input as { tickers: string[] };
 
-  const sentimentData: Record<string, object> = {};
+  // Run Perplexity search + StockTwits in parallel
+  const [perplexityResult, ...stocktwitsResults] = await Promise.all([
+    fetchPerplexitySentiment(tickers),
+    ...tickers.map(fetchStockTwitsSentiment),
+  ]);
 
-  await Promise.allSettled(
-    tickers.map(async (ticker) => {
-      const [stocktwits, reddit] = await Promise.all([
-        fetchStockTwitsSentiment(ticker),
-        fetchRedditSentiment(ticker),
-      ]);
-      sentimentData[ticker] = {
-        stocktwits: stocktwits ?? "Not available",
-        reddit: reddit ?? "Not available (configure REDDIT_CLIENT_ID/SECRET)",
-      };
-    })
-  );
+  // Build StockTwits section if any data came back
+  const stocktwitsSection: string[] = [];
+  tickers.forEach((ticker, i) => {
+    const st = stocktwitsResults[i];
+    if (st) {
+      stocktwitsSection.push(
+        `${ticker}: ${st.bullishPct}% bullish / ${st.bearishPct}% bearish (${st.total} recent messages)\n` +
+          `Top messages: ${st.topMessages.map((m: string) => `"${m}"`).join(" | ")}`
+      );
+    }
+  });
 
+  const combinedInput = [
+    `## Social Media Search (Reddit, X/Twitter, News — last 48h)\n\n${perplexityResult}`,
+    stocktwitsSection.length > 0
+      ? `## StockTwits Live Stream\n\n${stocktwitsSection.join("\n\n")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+
+  // Ask Claude to synthesize
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 1500,
+    max_tokens: 1400,
     messages: [
       {
         role: "user",
-        content: `Analyze social sentiment for ${tickers.join(", ")} based on StockTwits and Reddit data.
+        content: `You are a social sentiment analyst. Synthesize the following multi-platform sentiment data for ${tickers.join(", ")} into a clear, actionable report.
 
-Sentiment data:
-${JSON.stringify(sentimentData, null, 2)}
+${combinedInput}
 
-Provide:
-1. Overall sentiment score for each ticker (bullish/bearish/neutral with confidence)
-2. Retail investor interest level (high/medium/low)
-3. Notable themes or narratives in the social data
-4. Any contrarian signals (extremely bullish = potential top, extremely bearish = potential bottom)
-5. How social sentiment aligns with or diverges from fundamentals
+Write a structured report covering:
+1. **Overall Sentiment Score** for each ticker: Strongly Bullish (4) / Bullish (3) / Neutral (2) / Bearish (1) / Strongly Bearish (0) — with a one-line rationale
+2. **Retail Interest Level**: High / Medium / Low (based on volume of discussion)
+3. **Key Narratives**: What story is driving the discussion? (AI hype, earnings, product launch, macro fear, short squeeze, etc.)
+4. **Notable Posts/Quotes**: The most impactful things people are saying
+5. **Contrarian Signals**: Extremely bullish social sentiment can be a sell signal (euphoria top); extremely bearish can signal capitulation
+6. **Divergence Alert**: Does social sentiment align with or contradict the fundamental picture?
 
-Be specific about what the data shows.`,
+Be specific with names, numbers, and sources from the data provided.`,
       },
     ],
   });
