@@ -33,6 +33,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full`}
+      suppressHydrationWarning
     >
       <body className="h-full flex overflow-hidden bg-[var(--color-bg)]">
         <Sidebar />
