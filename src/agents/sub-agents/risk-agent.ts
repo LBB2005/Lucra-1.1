@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getCandles, getSnapshots } from "@/lib/finnhub";
+import { getSkillsPrompt } from "@/agents/skills";
 
 export async function runRiskAgent(input: unknown): Promise<string> {
   const { tickers, focus } = input as { tickers: string[]; focus?: string };
@@ -62,6 +63,7 @@ export async function runRiskAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("risk"),
     max_tokens: 10000,
     thinking: { type: "enabled", budget_tokens: 8000 },
     messages: [

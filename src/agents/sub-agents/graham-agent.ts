@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getFinancials } from "@/lib/polygon";
+import { getSkillsPrompt } from "@/agents/skills";
 import { getBasicFinancials, getQuote } from "@/lib/finnhub";
 
 interface GrahamInput {
@@ -50,6 +51,7 @@ export async function runGrahamAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("graham"),
     max_tokens: 2000,
     messages: [
       {

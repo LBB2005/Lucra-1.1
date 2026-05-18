@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getCandles } from "@/lib/finnhub";
+import { getSkillsPrompt } from "@/agents/skills";
 
 function calcSMA(closes: number[], period: number): number | null {
   if (closes.length < period) return null;
@@ -87,6 +88,7 @@ export async function runTechnicalAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("technical"),
     max_tokens: 1500,
     messages: [
       {

@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getOptionsSnapshot } from "@/lib/polygon";
+import { getSkillsPrompt } from "@/agents/skills";
 
 export async function runOptionsAgent(input: unknown): Promise<string> {
   const { tickers } = input as { tickers: string[] };
@@ -64,6 +65,7 @@ export async function runOptionsAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("options"),
     max_tokens: 1500,
     messages: [
       {

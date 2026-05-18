@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getBasicFinancials, getSnapshots, getPeers } from "@/lib/finnhub";
+import { getSkillsPrompt } from "@/agents/skills";
 
 export async function runCompetitorAgent(input: unknown): Promise<string> {
   const { ticker, peers: inputPeers } = input as { ticker: string; peers?: string[] };
@@ -47,6 +48,7 @@ export async function runCompetitorAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("competitor"),
     max_tokens: 10000,
     thinking: { type: "enabled", budget_tokens: 8000 },
     messages: [

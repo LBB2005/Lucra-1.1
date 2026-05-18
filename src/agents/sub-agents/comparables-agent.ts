@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getFinancials } from "@/lib/polygon";
+import { getSkillsPrompt } from "@/agents/skills";
 import { getBasicFinancials, getQuote, getPeers } from "@/lib/finnhub";
 
 interface ComparablesInput {
@@ -100,6 +101,7 @@ export async function runComparablesAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("comparables"),
     max_tokens: 2000,
     messages: [{
       role: "user",

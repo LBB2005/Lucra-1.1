@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getMarketSnapshot, getMarketNews } from "@/lib/finnhub";
+import { getSkillsPrompt } from "@/agents/skills";
 import { perplexitySearch } from "@/lib/perplexity";
 
 export async function runMacroAgent(input: unknown): Promise<string> {
@@ -43,6 +44,7 @@ export async function runMacroAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("macro"),
     max_tokens: 10000,
     thinking: { type: "enabled", budget_tokens: 8000 },
     messages: [

@@ -7,6 +7,7 @@
  */
 
 import { anthropic, MODEL } from "@/lib/anthropic";
+import { getSkillsPrompt } from "@/agents/skills";
 import { getInsiderTransactions } from "@/lib/finnhub";
 import { searchRecentForm4 } from "@/lib/edgar";
 
@@ -213,6 +214,7 @@ export async function runInsiderAgent(input: unknown): Promise<string> {
   // ── C. Claude synthesis ───────────────────────────────────────────────────
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("insider"),
     max_tokens: 1600,
     messages: [
       {

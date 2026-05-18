@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getFinancialsReported, getBasicFinancials, getSnapshots } from "@/lib/finnhub";
+import { getSkillsPrompt } from "@/agents/skills";
 
 function runDCF(fcf: number, growthRate: number, terminalGrowthRate: number, wacc: number, years = 10) {
   let pv = 0;
@@ -73,6 +74,7 @@ export async function runDcfAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("dcf"),
     max_tokens: 10000,
     thinking: { type: "enabled", budget_tokens: 8000 },
     messages: [

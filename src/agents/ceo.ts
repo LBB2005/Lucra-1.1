@@ -15,6 +15,7 @@ import { runGrahamAgent } from "./sub-agents/graham-agent";
 import { runAnalystAgent } from "./sub-agents/analyst-agent";
 import { runHypeAgent } from "./sub-agents/hype-agent";
 import { runFundamentalsAgent } from "./sub-agents/fundamentals-agent";
+import { checkCache, saveCache, extractTickers, getTickerMemory, saveTickerMemory } from "@/lib/agentMemory";
 import type { AgentEvent, AgentName } from "@/types/chat";
 import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 
@@ -121,6 +122,19 @@ Use charts liberally:
 - Always set a descriptive title and unit`;
 
   console.log("[ceo] starting for prompt:", userPrompt.slice(0, 60));
+
+  // ── Extract tickers + inject previous analysis memory ─────────────────────
+  const mentionedTickers = [
+    ...new Set([
+      ...extractTickers(userPrompt),
+      ...extractTickers(portfolioContext),
+    ]),
+  ];
+  const memoryBlock = await getTickerMemory(mentionedTickers);
+  const fullSystemPrompt = memoryBlock
+    ? systemPrompt + "\n\n" + memoryBlock
+    : systemPrompt;
+
   const messages: MessageParam[] = [{ role: "user", content: userPrompt }];
 
   let iteration = 0;
@@ -137,7 +151,7 @@ Use charts liberally:
       max_tokens: 8192,
       system: [
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } } as any,
+        { type: "text", text: fullSystemPrompt, cache_control: { type: "ephemeral" } } as any,
       ],
       tools: agentTools,
       messages,
@@ -156,6 +170,10 @@ Use charts liberally:
         .map((b) => (b as { type: string; text: string }).text)
         .join("\n\n");
       emit({ type: "final_response", content: finalResponse });
+      // Fire-and-forget: extract insights and save to memory after response is sent
+      saveTickerMemory(mentionedTickers, finalResponse, anthropic).catch((e) =>
+        console.error("[memory] save error:", e)
+      );
       break;
     }
 
@@ -185,10 +203,27 @@ Use charts liberally:
           const handler = agentDispatch[block.name];
           if (!handler) throw new Error(`Unknown agent: ${block.name}`);
 
+          // ── Cache check ───────────────────────────────────────────────────
+          const cached = await checkCache(block.name, block.input);
+          if (cached) {
+            agentOutputs.set(block.name, cached);
+            emit({ type: "agent_complete", agent: agentName, result: cached });
+            return {
+              type: "tool_result" as const,
+              tool_use_id: block.id,
+              content: cached,
+            };
+          }
+
           const run = handler(block.input);
           const result = DEEP_AGENTS.has(block.name)
             ? await run
             : await withTimeout(run, STANDARD_TIMEOUT_MS, block.name);
+
+          // ── Cache save (non-blocking) ─────────────────────────────────────
+          saveCache(block.name, block.input, result).catch((e) =>
+            console.error("[cache] save error:", e)
+          );
 
           agentOutputs.set(block.name, result);
           emit({ type: "agent_complete", agent: agentName, result });

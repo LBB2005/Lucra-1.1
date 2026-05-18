@@ -104,3 +104,29 @@ model Message {
 
   @@map("messages")
 }
+
+// ── Agent memory + caching ───────────────────────────────────────────────────
+
+model AgentCache {
+  id        String   @id @default(cuid())
+  cacheKey  String   @unique   // sha256(agentName + normalized input), first 16 hex chars
+  agentName String
+  result    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([agentName])
+  @@index([expiresAt])
+  @@map("agent_cache")
+}
+
+model TickerMemory {
+  id        String   @id @default(cuid())
+  ticker    String                          // uppercase, e.g. "AAPL"
+  insight   String                          // 1-2 sentence distilled finding
+  source    String?                         // which agent produced it
+  createdAt DateTime @default(now())
+
+  @@index([ticker, createdAt])
+  @@map("ticker_memory")
+}

@@ -6,6 +6,7 @@
  */
 
 import { anthropic, MODEL } from "@/lib/anthropic";
+import { getSkillsPrompt } from "@/agents/skills";
 import { getCikByTicker, getCompanyFacts, extractFundamentalTimeSeries } from "@/lib/edgar";
 import { getFinancialsReported, getBasicFinancials } from "@/lib/finnhub";
 
@@ -170,6 +171,7 @@ export async function runFundamentalsAgent(input: unknown): Promise<string> {
   // ── 4. Ask Claude to write the trend analysis ─────────────────────────────
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("fundamentals"),
     max_tokens: 1800,
     messages: [
       {

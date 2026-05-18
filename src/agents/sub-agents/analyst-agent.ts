@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getRecommendationTrends, getPriceTarget, getQuote } from "@/lib/finnhub";
+import { getSkillsPrompt } from "@/agents/skills";
 
 interface AnalystInput {
   tickers: string[];
@@ -53,6 +54,7 @@ export async function runAnalystAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("analyst"),
     max_tokens: 2000,
     messages: [
       {

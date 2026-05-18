@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getEarnings, getEarningsCalendar, getRecommendationTrends } from "@/lib/finnhub";
+import { getSkillsPrompt } from "@/agents/skills";
 
 export async function runEarningsAgent(input: unknown): Promise<string> {
   const { tickers } = input as { tickers: string[] };
@@ -50,6 +51,7 @@ export async function runEarningsAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("earnings"),
     max_tokens: 1500,
     messages: [
       {

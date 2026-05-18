@@ -9,6 +9,7 @@
  */
 
 import { anthropic, MODEL } from "@/lib/anthropic";
+import { getSkillsPrompt } from "@/agents/skills";
 
 const PERPLEXITY_API = "https://api.perplexity.ai/chat/completions";
 
@@ -141,6 +142,7 @@ export async function runSentimentAgent(input: unknown): Promise<string> {
   // Ask Claude to synthesize
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("sentiment"),
     max_tokens: 1400,
     messages: [
       {

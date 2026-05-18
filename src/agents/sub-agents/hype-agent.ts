@@ -5,6 +5,8 @@
  * news, and YouTube. Returns a 0–10 hype score with evidence.
  */
 
+import { getSkillsPrompt } from "@/agents/skills";
+
 const PERPLEXITY_API = "https://api.perplexity.ai/chat/completions";
 
 export async function runHypeAgent(input: unknown): Promise<string> {
@@ -17,9 +19,11 @@ export async function runHypeAgent(input: unknown): Promise<string> {
 
   const nameLabel = companyName ? `${ticker} (${companyName})` : ticker;
 
-  const systemPrompt = `You are a financial intelligence analyst specializing in narrative momentum and social sentiment.
-Your job is to search the web for real-time discussion and hype around stocks, then produce a structured analysis.
-Be specific — cite actual post titles, headlines, and communities you found. Do not fabricate evidence.`;
+  const systemPrompt = [
+    getSkillsPrompt("hype"),
+    "Your job is to search the web for real-time discussion and hype around stocks, then produce a structured analysis.",
+    "Be specific — cite actual post titles, headlines, and communities you found. Do not fabricate evidence.",
+  ].filter(Boolean).join("\n\n");
 
   const userPrompt = `Search Reddit, X/Twitter, financial news sites, YouTube, and any other public sources for discussion about ${nameLabel} in the last 7 days.
 

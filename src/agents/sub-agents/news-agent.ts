@@ -1,5 +1,6 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { perplexitySearch } from "@/lib/perplexity";
+import { getSkillsPrompt } from "@/agents/skills";
 import { getCompanyNews } from "@/lib/finnhub";
 
 export async function runNewsAgent(input: unknown): Promise<string> {
@@ -40,6 +41,7 @@ export async function runNewsAgent(input: unknown): Promise<string> {
 
   const response = await anthropic.messages.create({
     model: MODEL,
+    system: getSkillsPrompt("news"),
     max_tokens: 1500,
     messages: [
       {
