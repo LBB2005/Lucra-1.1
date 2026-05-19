@@ -86,6 +86,32 @@ export async function runTechnicalAgent(input: unknown): Promise<string> {
     })
   );
 
+  // ── Data quality audit ────────────────────────────────────────────────────
+  const failedTickers = tickers.filter((t) => (results[t] as { error?: string })?.error);
+  const successTickers = tickers.filter((t) => !(results[t] as { error?: string })?.error);
+  const allFailed = failedTickers.length === tickers.length;
+
+  // If every ticker failed, return a hard no-data signal — don't let Claude guess
+  if (allFailed) {
+    return [
+      "⚠️ DATA UNAVAILABLE — TECHNICAL ANALYSIS BLOCKED",
+      "",
+      `No live price data could be retrieved for: ${tickers.join(", ")}`,
+      "This is likely a Finnhub API quota or connectivity issue.",
+      "",
+      "CONSEQUENCE: Current prices, RSI, MACD, and moving averages are all unknown.",
+      "Any position-sizing, trim/hold calls, or cost-basis comparisons that depend on",
+      "current price MUST be withheld until live data is available.",
+      "",
+      `Tickers with no data: ${failedTickers.join(", ")}`,
+    ].join("\n");
+  }
+
+  // Build data-quality header to force Claude to caveat missing tickers
+  const dataQualityNote = failedTickers.length > 0
+    ? `\n\n⚠️ DATA QUALITY WARNING: The following tickers returned NO live price data and must be explicitly marked as "No data — signal unavailable" with NO technical signal assigned: ${failedTickers.join(", ")}. Do NOT infer or estimate signals for these tickers. Only analyze: ${successTickers.join(", ")}.`
+    : "";
+
   const response = await anthropic.messages.create({
     model: MODEL,
     system: getSkillsPrompt("technical"),
@@ -93,7 +119,11 @@ export async function runTechnicalAgent(input: unknown): Promise<string> {
     messages: [
       {
         role: "user",
-        content: `Interpret technical indicators for ${tickers.join(", ")}. For each ticker give a bullish/bearish/neutral signal, note overbought/oversold conditions, and flag any key technical levels or crossovers.\n\n${JSON.stringify(results, null, 2)}`,
+        content: `Interpret technical indicators for ${tickers.join(", ")}. For each ticker give a bullish/bearish/neutral signal, note overbought/oversold conditions, and flag any key technical levels or crossovers.${dataQualityNote}
+
+CRITICAL RULE: If a ticker's data shows { "error": ... }, you MUST write "⚠️ No data available — technical signal withheld" for that ticker. Never assign a signal without actual indicator values.
+
+${JSON.stringify(results, null, 2)}`,
       },
     ],
   });

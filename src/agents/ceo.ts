@@ -33,6 +33,12 @@ const DEEP_AGENTS = new Set([
 ]);
 const STANDARD_TIMEOUT_MS = 60_000;
 
+// Per-agent timeout overrides (ms) — used instead of STANDARD_TIMEOUT_MS when set
+const AGENT_TIMEOUT_MS: Record<string, number> = {
+  run_macro_agent: 300_000, // 5 minutes — multi-source macro data fetching can be slow
+  run_risk_agent:  300_000, // 5 minutes — portfolio-wide beta/correlation analysis
+};
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
@@ -99,6 +105,12 @@ ${portfolioContext ? `## User's Portfolio\n${portfolioContext}` : "The user has 
 - Always provide specific, actionable recommendations backed by the data
 - End with a clear "Summary & Recommendation" section
 - Note this is not financial advice
+
+## Data Quality Rules — NON-NEGOTIABLE
+- If the Technical Agent reports "DATA UNAVAILABLE" or "No data available" for a ticker, you MUST NOT make any trim/hold/buy calls that depend on current price for that ticker. Instead write: "⚠️ Technical data unavailable for [TICKER] — price-based calls withheld."
+- If an agent returns an error or explicitly states data is missing, treat that dimension as unknown. Do not fill gaps with assumptions or stale estimates.
+- Any chart showing "current allocation" or cost-basis comparisons requires live price data. If that data is absent, omit the chart and note why.
+- Confidence in a recommendation must match the quality of supporting data. Missing a key data source = explicitly lower confidence, not silent omission.
 
 ## Chart Output Format
 When your response includes comparative data, performance figures, or time series — embed an interactive chart using a fenced \`\`\`chart code block. The chart JSON schema:
@@ -216,9 +228,10 @@ Use charts liberally:
           }
 
           const run = handler(block.input);
+          const agentTimeoutMs = AGENT_TIMEOUT_MS[block.name] ?? STANDARD_TIMEOUT_MS;
           const result = DEEP_AGENTS.has(block.name)
             ? await run
-            : await withTimeout(run, STANDARD_TIMEOUT_MS, block.name);
+            : await withTimeout(run, agentTimeoutMs, block.name);
 
           // ── Cache save (non-blocking) ─────────────────────────────────────
           saveCache(block.name, block.input, result).catch((e) =>
@@ -275,6 +288,7 @@ ${agentSummaryLines || "No sub-agent data collected."}
 ## Your Task
 Write a concise second-opinion critique (3–5 bullet points, max 150 words). Focus on:
 - Any claims that lack data support or are over-stated
+- **Data masking**: did the report make confident price-based calls (trim/hold, position sizing, cost-basis comparisons) despite a sub-agent reporting no live price data? Call this out explicitly.
 - Contradictions between sub-agents (e.g. bullish sentiment vs negative technicals)
 - Key risks or bearish factors the main report downplayed
 - Data gaps that would change the conclusion

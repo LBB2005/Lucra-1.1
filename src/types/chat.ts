@@ -1,5 +1,8 @@
 export type ChatMode = "simple" | "agent";
 
+/** Total number of sub-agents the CEO can dispatch (excludes the skeptic post-pass) */
+export const AGENT_COUNT = 15;
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";

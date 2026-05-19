@@ -7,14 +7,26 @@ interface Props {
   quote?: Quote;
   portfolioPct?: number;
   onRemove: (id: string) => void;
+  /** Compact = sidebar holding row (ticker chip + name + pct, no expand) */
+  compact?: boolean;
 }
 
 function fmt(n: number, decimals = 2) {
   return n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-export default function HoldingCard({ holding, quote, portfolioPct, onRemove }: Props) {
+function Stat({ label, value, color, span }: { label: string; value: string; color?: string; span?: boolean }) {
+  return (
+    <div className={span ? "col-span-2" : ""}>
+      <p className="text-[10px] text-[var(--color-muted)] leading-none mb-0.5">{label}</p>
+      <p className={`text-[11px] font-medium ${color ?? "text-[var(--color-text-secondary)]"}`}>{value}</p>
+    </div>
+  );
+}
+
+export default function HoldingCard({ holding, quote, portfolioPct, onRemove, compact = false }: Props) {
   const [expanded, setExpanded] = useState(false);
+
   const price = quote?.price ?? 0;
   const marketValue = price > 0 ? price * holding.shares : holding.avgCost * holding.shares;
   const costBasis = holding.avgCost * holding.shares;
@@ -24,6 +36,46 @@ export default function HoldingCard({ holding, quote, portfolioPct, onRemove }: 
   const dayChange = quote?.changePct ?? 0;
   const isDayUp = dayChange >= 0;
 
+  /* ── Compact sidebar row ─────────────────────────────────────────────── */
+  if (compact) {
+    return (
+      <div
+        className="group grid items-center gap-[10px] px-[18px] py-[8px] cursor-pointer transition-colors duration-100"
+        style={{
+          gridTemplateColumns: "auto 1fr auto",
+          background: "transparent",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-sidebar-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        {/* Ticker chip */}
+        <span
+          className="text-[10.5px] font-bold tracking-[0.04em] px-[6px] py-[3px] rounded-[5px]"
+          style={{ color: "var(--color-accent)", background: "var(--color-accent-light)" }}
+        >
+          {holding.ticker}
+        </span>
+
+        {/* Company name */}
+        <span
+          className="text-[11.5px] overflow-hidden text-ellipsis whitespace-nowrap"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          {holding.companyName ?? holding.ticker}
+        </span>
+
+        {/* P&L pct */}
+        <span
+          className="text-[11px] font-semibold tabular-nums"
+          style={{ color: price > 0 ? (isUp ? "var(--color-bull)" : "var(--color-bear)") : "var(--color-muted)" }}
+        >
+          {price > 0 ? `${isUp ? "+" : ""}${fmt(gainLossPct, 1)}%` : "—"}
+        </span>
+      </div>
+    );
+  }
+
+  /* ── Full expandable card ────────────────────────────────────────────── */
   return (
     <div
       className="group flex flex-col px-3 py-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] transition-colors duration-150 cursor-pointer"
@@ -40,7 +92,10 @@ export default function HoldingCard({ holding, quote, portfolioPct, onRemove }: 
           )}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <span className={`text-[11px] font-medium ${isUp ? "text-emerald-600" : "text-red-500"}`}>
+          <span
+            className="text-[11px] font-medium"
+            style={{ color: price > 0 ? (isUp ? "var(--color-bull)" : "var(--color-bear)") : "var(--color-muted)" }}
+          >
             {price > 0 ? `${isUp ? "+" : ""}${fmt(gainLossPct, 1)}%` : "—"}
           </span>
           <button
@@ -82,15 +137,6 @@ export default function HoldingCard({ holding, quote, portfolioPct, onRemove }: 
           {holding.sector && <Stat label="Sector" value={holding.sector} span />}
         </div>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value, color, span }: { label: string; value: string; color?: string; span?: boolean }) {
-  return (
-    <div className={span ? "col-span-2" : ""}>
-      <p className="text-[10px] text-[var(--color-muted)] leading-none mb-0.5">{label}</p>
-      <p className={`text-[11px] font-medium ${color ?? "text-[var(--color-text-secondary)]"}`}>{value}</p>
     </div>
   );
 }

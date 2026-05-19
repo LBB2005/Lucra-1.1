@@ -6,7 +6,11 @@ import { useQuotes } from "@/hooks/useQuotes";
 import { useChatStore } from "@/stores/chatStore";
 import type { Holding, Quote } from "@/types/portfolio";
 
-const SEGMENT_COLORS = ["#1a4b8f", "#2563c4", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#7c3aed", "#a78bfa"];
+function segColor(i: number) {
+  return `oklch(${0.55 - i * 0.04} 0.135 ${252 - i * 14})`;
+}
+// Keep a fallback array for the legend swatch
+const SEGMENT_COLORS = Array.from({ length: 10 }, (_, i) => segColor(i));
 
 function fmt(n: number, d = 2) {
   return n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -107,62 +111,169 @@ export default function PortfolioPage() {
     router.push("/chat");
   }
 
+  const now = new Date();
+  const timeLabel = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  const dateLabel = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-white">
-      {/* Header */}
-      <div className="flex-shrink-0 border-b border-[var(--color-border)] px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => router.push("/chat")}
-            className="text-[var(--color-muted)] hover:text-[var(--color-accent)] transition-colors duration-150"
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: "var(--color-bg)" }}>
+      {/* Topbar */}
+      <div
+        className="flex-shrink-0 flex items-center justify-between px-7 py-3"
+        style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-bg)" }}
+      >
+        <div className="flex items-baseline gap-3.5">
+          <span
+            className="text-[12px] italic"
+            style={{ fontFamily: "var(--font-serif)", color: "var(--color-muted)" }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <path d="M19 12H5M12 5l-7 7 7 7" />
-            </svg>
-          </button>
-          <h1 className="text-base font-semibold text-[var(--color-text)]">Portfolio</h1>
+            As of {timeLabel} ET · {dateLabel}
+          </span>
+          <h1 className="m-0 text-[15px] font-semibold text-[var(--color-text)]">Portfolio</h1>
         </div>
-        <div className="flex items-center gap-6 text-right">
-          {/* Buying power */}
-          <div
-            className="cursor-pointer group"
+        <div className="flex items-center gap-2">
+          <button
             onClick={startEditCash}
-            title="Click to update buying power"
+            className="text-[12px] px-3 py-[5px] rounded-[9px] transition-all duration-150"
+            style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-secondary)" }}
+            title="Update buying power"
           >
             {editingCash ? (
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-[var(--color-muted)]">$</span>
-                <input
-                  ref={cashInputRef}
-                  value={cashInput}
-                  onChange={(e) => setCashInput(e.target.value)}
-                  onBlur={commitCash}
-                  onKeyDown={(e) => { if (e.key === "Enter") commitCash(); if (e.key === "Escape") setEditingCash(false); }}
-                  className="w-28 text-sm font-semibold text-[var(--color-text)] bg-transparent border-b border-[var(--color-accent)] focus:outline-none text-right"
-                  placeholder="0.00"
-                />
-              </div>
+              <input
+                ref={cashInputRef}
+                value={cashInput}
+                onChange={(e) => setCashInput(e.target.value)}
+                onBlur={commitCash}
+                onKeyDown={(e) => { if (e.key === "Enter") commitCash(); if (e.key === "Escape") setEditingCash(false); }}
+                className="w-24 bg-transparent border-b border-[var(--color-accent)] focus:outline-none text-right text-[12px]"
+                placeholder="0.00"
+              />
             ) : (
-              <>
-                <p className="text-sm font-semibold text-[var(--color-text)] group-hover:text-[var(--color-accent)] transition-colors">
-                  ${cashBalance > 0 ? fmt(cashBalance, 2) : "—"}
-                </p>
-                <p className="text-[11px] text-[var(--color-muted)]">buying power</p>
-              </>
+              <span>{cashBalance > 0 ? `$${fmt(cashBalance, 0)} cash` : "Add cash"}</span>
             )}
-          </div>
-          <div>
-            <p className="text-xl font-bold text-[var(--color-text)]">
-              ${totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-            </p>
-            <p className="text-[11px] text-[var(--color-muted)]">{holdings.length} positions</p>
-          </div>
-          <div className={totalGain >= 0 ? "text-emerald-600" : "text-red-500"}>
-            <p className="text-sm font-semibold">{totalGain >= 0 ? "+" : ""}${fmt(Math.abs(totalGain), 0)}</p>
-            <p className="text-[11px]">{totalGain >= 0 ? "+" : ""}{fmt(totalGainPct, 1)}% total</p>
-          </div>
+          </button>
+          <button
+            className="text-[12px] px-3 py-[5px] rounded-[9px] transition-all duration-150"
+            style={{
+              border: "1px solid var(--color-accent)",
+              background: "var(--color-accent)",
+              color: "white",
+            }}
+            onClick={() => { reset(); setPendingMessage("Give me a full portfolio analysis"); router.push("/chat"); }}
+          >
+            Ask AI
+          </button>
         </div>
       </div>
+
+      {/* KPI strip */}
+      {holdings.length > 0 && (
+        <div
+          className="flex-shrink-0 px-8 py-5"
+          style={{ borderBottom: "1px solid var(--color-border)" }}
+        >
+          <div
+            className="max-w-[1100px] mx-auto rounded-[var(--radius-lg)] px-6 py-5"
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg)",
+              boxShadow: "var(--shadow-card)",
+              display: "grid",
+              gridTemplateColumns: "1.4fr 1fr 1fr 1fr 1.2fr",
+              gap: 28,
+              alignItems: "center",
+            }}
+          >
+            {/* Total Value */}
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)] mb-1.5">
+                Total Value
+              </p>
+              <p
+                className="text-[30px] font-bold leading-[1.05] tabular-nums text-[var(--color-text)]"
+                style={{ fontFamily: "var(--font-serif)", letterSpacing: "-0.015em" }}
+              >
+                ${totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+              </p>
+              <p className="text-[12px] mt-1 tabular-nums text-[var(--color-muted)]">
+                {holdings.length} positions · {cashBalance > 0 ? `$${fmt(cashBalance, 0)} cash` : "no cash"}
+              </p>
+            </div>
+
+            {/* All-Time */}
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)] mb-1.5">All-Time</p>
+              <p
+                className="text-[19px] font-semibold tabular-nums"
+                style={{ color: totalGain >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}
+              >
+                {totalGain >= 0 ? "+" : ""}${fmt(Math.abs(totalGain), 0)}
+              </p>
+              <p
+                className="text-[12px] mt-1 font-medium tabular-nums"
+                style={{ color: totalGain >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}
+              >
+                {totalGain >= 0 ? "+" : ""}{fmt(totalGainPct, 2)}%
+              </p>
+            </div>
+
+            {/* Cost Basis */}
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)] mb-1.5">Cost Basis</p>
+              <p className="text-[19px] font-semibold tabular-nums text-[var(--color-text)]">
+                ${fmt(totalCost, 0)}
+              </p>
+              <p className="text-[12px] mt-1 text-[var(--color-muted)]">Invested</p>
+            </div>
+
+            {/* Buying power */}
+            <div
+              className="cursor-pointer"
+              onClick={startEditCash}
+              title="Click to update"
+            >
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)] mb-1.5">Buying Power</p>
+              <p className="text-[19px] font-semibold tabular-nums text-[var(--color-text)]">
+                {cashBalance > 0 ? `$${fmt(cashBalance, 0)}` : "—"}
+              </p>
+              <p className="text-[12px] mt-1 text-[var(--color-muted)]">Available cash</p>
+            </div>
+
+            {/* vs S&P 500 */}
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)] mb-1.5">
+                vs S&P 500 YTD
+              </p>
+              <div className="flex items-baseline gap-1.5">
+                <span
+                  className="text-[19px] font-semibold tabular-nums"
+                  style={{ color: totalGainPct >= 0 ? "var(--color-bull)" : "var(--color-bear)" }}
+                >
+                  {totalGainPct >= 0 ? "+" : ""}{fmt(totalGainPct, 1)}%
+                </span>
+                <span className="text-[11.5px] text-[var(--color-muted)]">you</span>
+              </div>
+              {/* Mini compare bars */}
+              <div className="flex flex-col gap-[3px] mt-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9.5px] font-bold w-4" style={{ color: "var(--color-accent)" }}>YOU</span>
+                  <div
+                    className="h-[5px] rounded-full"
+                    style={{ width: `${Math.min(Math.abs(totalGainPct) / 20 * 65, 65)}%`, background: "var(--color-accent)" }}
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9.5px] font-bold w-4 text-[var(--color-muted)]">SPX</span>
+                  <div
+                    className="h-[5px] rounded-full"
+                    style={{ width: "40%", background: "var(--color-border-strong)" }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
@@ -173,117 +284,161 @@ export default function PortfolioPage() {
         ) : (
           <div className="max-w-[1100px] mx-auto px-8 py-6 flex flex-col gap-6">
             {/* Charts row */}
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-2 gap-[18px]">
               {/* Allocation donut */}
-              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-muted)] mb-4">Allocation</p>
+              <div
+                className="rounded-[var(--radius-lg)] p-5"
+                style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)] mb-[14px]">Allocation</p>
                 <div className="flex items-start gap-5">
-                  <svg width="180" height="180" viewBox="0 0 180 180" className="flex-shrink-0">
+                  <svg width="200" height="200" viewBox="0 0 200 200" className="flex-shrink-0">
                     {segments.map((seg) => (
                       <path
                         key={seg.ticker}
                         d={seg.path}
                         fill={seg.color}
-                        opacity={hoveredTicker && hoveredTicker !== seg.ticker ? 0.25 : 1}
+                        opacity={hoveredTicker && hoveredTicker !== seg.ticker ? 0.28 : 1}
                         className="transition-opacity duration-150 cursor-pointer"
-                        style={{ filter: hoveredTicker === seg.ticker ? "brightness(1.08)" : undefined }}
                         onMouseEnter={() => setHoveredTicker(seg.ticker)}
                         onMouseLeave={() => setHoveredTicker(null)}
                       />
                     ))}
-                    {/* Center label */}
-                    <text x="90" y="83" textAnchor="middle" fontSize="10" fill="#94a3b8" fontWeight="500" letterSpacing="0.04em">TOTAL</text>
-                    <text x="90" y="101" textAnchor="middle" fontSize="16" fontWeight="700" fill="#0f172a">
+                    <text x="100" y="93" textAnchor="middle" fontSize="10" fill="var(--color-muted)" fontWeight="600" letterSpacing="0.18em">EQUITY</text>
+                    <text x="100" y="112" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--color-text)" fontFamily="var(--font-serif)">
                       ${totalValue >= 1000 ? fmt(totalValue / 1000, 1) + "k" : fmt(totalValue, 0)}
                     </text>
                   </svg>
                   {/* Legend */}
-                  <div className="flex flex-col gap-2.5 pt-1 min-w-0">
+                  <div className="flex flex-col gap-1 pt-1 min-w-0 flex-1">
                     {rows.map((r, i) => (
                       <div
                         key={r.holding.ticker}
-                        className={`flex items-center gap-2 cursor-default rounded-lg px-2 py-1 -mx-2 transition-colors duration-100 ${hoveredTicker === r.holding.ticker ? "bg-[var(--color-accent-light)]" : ""}`}
+                        className="grid items-center gap-2.5 cursor-default rounded-[5px] px-[6px] py-[3px] -mx-[6px] transition-colors duration-100"
+                        style={{
+                          gridTemplateColumns: "10px 1fr auto",
+                          background: hoveredTicker === r.holding.ticker ? "var(--color-accent-light)" : "transparent",
+                        }}
                         onMouseEnter={() => setHoveredTicker(r.holding.ticker)}
                         onMouseLeave={() => setHoveredTicker(null)}
                       >
-                        <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: SEGMENT_COLORS[i % SEGMENT_COLORS.length] }} />
-                        <span className="text-[11px] font-bold text-[var(--color-text)] w-11">{r.holding.ticker}</span>
-                        <span className="text-[11px] text-[var(--color-muted)]">{fmt(r.pct, 1)}%</span>
+                        <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: SEGMENT_COLORS[i] }} />
+                        <span className="text-[11.5px] font-semibold text-[var(--color-text)]">{r.holding.ticker}</span>
+                        <span className="text-[11.5px] text-[var(--color-muted)] tabular-nums">{fmt(r.pct, 1)}%</span>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
 
-              {/* P&L performance bars */}
-              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-muted)] mb-4">Performance</p>
-                <div className="flex flex-col gap-2.5">
+              {/* P&L performance bars — divergent chart */}
+              <div
+                className="rounded-[var(--radius-lg)] p-5"
+                style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+              >
+                <div className="flex items-center justify-between mb-[14px]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
+                    Performance — return since avg cost
+                  </p>
+                </div>
+                <div className="flex flex-col gap-[7px]">
                   {rows.map((r) => {
                     const isPos = r.gainLossPct >= 0;
-                    const barW = Math.max(Math.abs(r.gainLossPct) / maxAbsGain * 100, 2);
+                    const w = Math.max((Math.abs(r.gainLossPct) / maxAbsGain) * 50, 1.5);
                     return (
-                      <div key={r.holding.ticker} className="flex items-center gap-3">
-                        <span className="text-[11px] font-bold text-[var(--color-accent)] w-12 text-right flex-shrink-0">{r.holding.ticker}</span>
-                        <div className="flex-1 relative h-5 flex items-center">
-                          <div
-                            className="h-full rounded-md transition-all duration-500 ease-out"
-                            style={{
-                              width: `${barW}%`,
-                              background: isPos
-                                ? "linear-gradient(90deg, #10b981, #059669)"
-                                : "linear-gradient(90deg, #f87171, #ef4444)",
-                            }}
-                          />
+                      <div key={r.holding.ticker} className="grid items-center gap-[10px]"
+                        style={{ gridTemplateColumns: "44px 1fr 1fr 60px" }}>
+                        <span className="text-[11px] font-bold tracking-[0.04em]" style={{ color: "var(--color-accent)" }}>{r.holding.ticker}</span>
+                        {/* Negative side */}
+                        <div className="h-[18px] flex justify-end" style={{ borderRight: "1px solid var(--color-border-strong)", paddingRight: 1 }}>
+                          {!isPos && (
+                            <div
+                              className="h-full rounded-l-[3px]"
+                              style={{ width: `${w}%`, background: "var(--color-bear)" }}
+                            />
+                          )}
                         </div>
-                        <span className={`text-[11px] font-semibold w-14 text-right flex-shrink-0 ${isPos ? "text-emerald-600" : "text-red-500"}`}>
+                        {/* Positive side */}
+                        <div className="h-[18px] flex">
+                          {isPos && (
+                            <div
+                              className="h-full rounded-r-[3px]"
+                              style={{ width: `${w}%`, background: "var(--color-bull)" }}
+                            />
+                          )}
+                        </div>
+                        <span
+                          className="text-[11.5px] font-semibold text-right tabular-nums"
+                          style={{ color: isPos ? "var(--color-bull)" : "var(--color-bear)" }}
+                        >
                           {isPos ? "+" : ""}{fmt(r.gainLossPct, 1)}%
                         </span>
                       </div>
                     );
                   })}
                 </div>
-                {/* Zero baseline note */}
-                <p className="text-[10px] text-[var(--color-muted)] mt-4 text-center">Return since avg cost</p>
               </div>
             </div>
 
             {/* Holdings table */}
-            <div className="rounded-2xl border border-[var(--color-border)] overflow-hidden">
-              <div className="bg-[var(--color-surface)] px-5 py-3 border-b border-[var(--color-border)]">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-muted)]">Holdings</p>
+            <div
+              className="overflow-hidden"
+              style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--color-border)" }}
+            >
+              <div
+                className="flex items-center justify-between px-5 py-3"
+                style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">Holdings</p>
+                <p className="text-[11px] text-[var(--color-muted)]">Click any row to open a research thread</p>
               </div>
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-                    {["Ticker", "Company", "Shares", "Price", "Mkt Value", "Cost Basis", "Gain/Loss", "P&L %", "Alloc"].map((h) => (
-                      <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)] px-4 py-2.5">{h}</th>
+                  <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
+                    {["Ticker", "Company", "Shares", "Price", "Day", "Mkt Value", "Gain/Loss", "P&L %", "Alloc"].map((h) => (
+                      <th key={h} className="text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)] px-4 py-[10px]">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, idx) => {
+                  {rows.map((r) => {
                     const cost = r.holding.avgCost * r.holding.shares;
                     const isPos = r.gainLoss >= 0;
+                    const dayPct = r.quote?.changePct ?? 0;
+                    const isDayPos = dayPct >= 0;
                     return (
-                      <tr key={r.holding.ticker} className={`border-b border-[var(--color-border)] hover:bg-[var(--color-accent-light)] transition-colors duration-100 ${idx % 2 === 0 ? "" : "bg-[var(--color-surface)]"}`}>
+                      <tr
+                        key={r.holding.ticker}
+                        style={{ borderBottom: "1px solid var(--color-border)", cursor: "pointer", transition: "background 100ms" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-accent-light)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+                        onClick={() => { reset(); setPendingMessage(`Analyze ${r.holding.ticker} — full research`); router.push("/chat"); }}
+                      >
                         <td className="px-4 py-3">
-                          <span className="text-xs font-bold text-[var(--color-accent)] bg-[var(--color-accent-light)] px-2 py-0.5 rounded">
+                          <span
+                            className="text-[11px] font-bold px-[7px] py-[3px] rounded-[5px] tracking-[0.04em]"
+                            style={{ color: "var(--color-accent)", background: "var(--color-accent-light)" }}
+                          >
                             {r.holding.ticker}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-[var(--color-text-secondary)]">{r.holding.companyName ?? "—"}</td>
-                        <td className="px-4 py-3 text-xs text-[var(--color-text)]">{fmt(r.holding.shares, r.holding.shares % 1 === 0 ? 0 : 2)}</td>
-                        <td className="px-4 py-3 text-xs text-[var(--color-text)]">{r.quote?.price ? `$${fmt(r.quote.price)}` : "—"}</td>
-                        <td className="px-4 py-3 text-xs font-medium text-[var(--color-text)]">${fmt(r.mv, 0)}</td>
-                        <td className="px-4 py-3 text-xs text-[var(--color-text-secondary)]">${fmt(cost, 0)}</td>
-                        <td className={`px-4 py-3 text-xs font-medium ${isPos ? "text-emerald-600" : "text-red-500"}`}>
+                        <td className="px-4 py-3 text-[12.5px] text-[var(--color-text-secondary)]">{r.holding.companyName ?? "—"}</td>
+                        <td className="px-4 py-3 text-[12.5px] text-[var(--color-text)] tabular-nums">{fmt(r.holding.shares, r.holding.shares % 1 === 0 ? 0 : 2)}</td>
+                        <td className="px-4 py-3 text-[12.5px] text-[var(--color-text)] tabular-nums">{r.quote?.price ? `$${fmt(r.quote.price)}` : "—"}</td>
+                        <td className="px-4 py-3 text-[12.5px] font-medium tabular-nums"
+                          style={{ color: r.quote ? (isDayPos ? "var(--color-bull)" : "var(--color-bear)") : "var(--color-muted)" }}>
+                          {r.quote ? `${isDayPos ? "+" : ""}${fmt(dayPct, 2)}%` : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-[12.5px] font-medium text-[var(--color-text)] tabular-nums">${fmt(r.mv, 0)}</td>
+                        <td className="px-4 py-3 text-[12.5px] font-medium tabular-nums"
+                          style={{ color: isPos ? "var(--color-bull)" : "var(--color-bear)" }}>
                           {isPos ? "+" : ""}${fmt(Math.abs(r.gainLoss), 0)}
                         </td>
-                        <td className={`px-4 py-3 text-xs font-semibold ${isPos ? "text-emerald-600" : "text-red-500"}`}>
+                        <td className="px-4 py-3 text-[12.5px] font-semibold tabular-nums"
+                          style={{ color: isPos ? "var(--color-bull)" : "var(--color-bear)" }}>
                           {isPos ? "+" : ""}{fmt(r.gainLossPct, 1)}%
                         </td>
-                        <td className="px-4 py-3 text-xs text-[var(--color-muted)]">{fmt(r.pct, 1)}%</td>
+                        <td className="px-4 py-3 text-[12.5px] text-[var(--color-muted)] tabular-nums">{fmt(r.pct, 1)}%</td>
                       </tr>
                     );
                   })}
@@ -297,16 +452,25 @@ export default function PortfolioPage() {
       {/* Ask bar */}
       <div
         className="flex-shrink-0 px-8 pb-6 pt-3"
-        style={{ background: "linear-gradient(to bottom, rgba(255,255,255,0) 0%, #ffffff 28%)" }}
+        style={{ background: "linear-gradient(to bottom, transparent 0%, var(--color-bg) 28%)" }}
       >
         <form onSubmit={handleAsk} className="max-w-[740px] mx-auto">
-          <div className="relative flex rounded-2xl border border-[var(--color-border)] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.05)] focus-within:border-slate-300 focus-within:shadow-[0_2px_18px_rgba(0,0,0,0.07)] transition-all duration-200">
+          <div
+            className="relative flex transition-all duration-200"
+            style={{
+              borderRadius: 16,
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg)",
+              boxShadow: "0 1px 6px rgba(15,23,42,0.04)",
+            }}
+          >
             <input
               type="text"
               value={askText}
               onChange={(e) => setAskText(e.target.value)}
               placeholder="Ask AI about this portfolio…"
-              className="flex-1 bg-transparent text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none py-3.5 pl-4 pr-11 leading-relaxed"
+              className="flex-1 bg-transparent text-[14px] focus:outline-none py-3.5 pl-4 pr-11 leading-relaxed"
+              style={{ color: "var(--color-text)" }}
             />
             <button
               type="submit"

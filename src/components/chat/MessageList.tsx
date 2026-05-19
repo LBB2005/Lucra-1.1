@@ -4,137 +4,203 @@ import Markdown from "./Markdown";
 import Message from "./Message";
 import { AGENT_LABELS } from "@/types/chat";
 import type { ChatMessage, ChatMode, AgentStep } from "@/types/chat";
+import { useMarketPulse } from "@/hooks/useMarketPulse";
+import { AGENT_COUNT } from "@/types/chat";
 
+/* ── Starter prompts with tags ──────────────────────────────────────────── */
 const SUGGESTIONS = [
-  "What are my biggest position risks right now?",
-  "Run a full DCF on my largest holding",
-  "Which positions should I consider trimming?",
-  "What's the macro environment saying about tech stocks?",
+  { tag: "RISK",  text: "What are my biggest position risks right now?" },
+  { tag: "VALUE", text: "Run a full DCF on my largest holding" },
+  { tag: "TRIM",  text: "Which positions should I consider trimming?" },
+  { tag: "MACRO", text: "How does today's macro environment affect my book?" },
 ];
 
-function LucraIcon() {
+/* ── Tiny helpers ───────────────────────────────────────────────────────── */
+function LucraAvatar() {
   return (
-    <div className="w-7 h-7 rounded-xl bg-[var(--color-accent)] flex items-center justify-center flex-shrink-0">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-        <polyline points="16 7 22 7 22 13" />
-      </svg>
+    <div
+      className="w-[30px] h-[30px] rounded-[9px] flex items-center justify-center flex-shrink-0 text-white text-[13px] font-black"
+      style={{ background: "var(--color-accent)", fontFamily: "var(--font-serif)", letterSpacing: "0.04em" }}
+    >
+      L
     </div>
   );
 }
 
-function Spinner({ size = 12, className = "" }: { size?: number; className?: string }) {
+function Spinner() {
   return (
     <span
-      className={`inline-block rounded-full border-2 border-[var(--color-accent)] border-t-transparent animate-spin flex-shrink-0 ${className}`}
-      style={{ width: size, height: size }}
+      className="inline-block rounded-full border-2 border-[var(--color-accent)] border-t-transparent flex-shrink-0"
+      style={{ width: 12, height: 12, animation: "spin 0.9s linear infinite" }}
     />
   );
 }
 
-function AgentActivityInline({ steps, ceoThinking }: { steps: AgentStep[]; ceoThinking?: string }) {
-  const hasSteps = steps.length > 0;
+/* ── Agent activity panel ("Research crew") ─────────────────────────────── */
+function AgentActivityPanel({ steps, ceoThinking }: { steps: AgentStep[]; ceoThinking?: string }) {
+  const complete  = steps.filter((s) => s.status === "complete").length;
+  const running   = steps.filter((s) => s.status === "running").length;
+  const total     = steps.length;
   const isCompiling = ceoThinking === "Compiling all reports…";
-  const runningCount = steps.filter(s => s.status === "running").length;
-  const doneCount = steps.filter(s => s.status === "complete").length;
-  const errorCount = steps.filter(s => s.status === "error").length;
 
   return (
-    <div className="flex gap-3">
-      <LucraIcon />
-      <div className="flex-1 min-w-0 pt-0.5">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden shadow-sm">
-
-          {/* Header bar */}
-          <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-slate-200 bg-white">
-            <Spinner size={13} />
-            <span className="text-xs font-semibold text-slate-700">
-              {!hasSteps
-                ? "Deploying agents…"
-                : isCompiling
-                ? "Synthesizing findings…"
-                : runningCount > 0
-                ? `${runningCount} agent${runningCount > 1 ? "s" : ""} running…`
-                : `${doneCount} agent${doneCount !== 1 ? "s" : ""} complete${errorCount > 0 ? ` · ${errorCount} error${errorCount !== 1 ? "s" : ""}` : ""}`
-              }
-            </span>
-            {hasSteps && (
-              <span className="ml-auto text-[11px] text-slate-400">
-                {doneCount}/{steps.length}
+    <div className="flex gap-[14px]">
+      <LucraAvatar />
+      <div className="flex-1 min-w-0 pt-0">
+        <div
+          className="rounded-[var(--radius-lg)] overflow-hidden fade-in"
+          style={{ border: "1px solid var(--color-border-strong)", boxShadow: "var(--shadow-card)" }}
+        >
+          {/* Header */}
+          <div
+            className="flex items-center gap-3 px-[14px] py-[11px]"
+            style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+          >
+            <div
+              className="w-[22px] h-[22px] rounded-[6px] flex items-center justify-center text-white flex-shrink-0"
+              style={{ background: "var(--color-accent)" }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+            </div>
+            <div className="flex flex-col gap-[1px]">
+              <span className="text-[12.5px] font-semibold text-[var(--color-text)]">Research crew</span>
+              <span className="text-[11px] text-[var(--color-muted)]">
+                {!total
+                  ? "Deploying agents…"
+                  : running > 0
+                  ? `${running} analyzing · ${complete} complete`
+                  : `${complete} of ${total} complete`}
               </span>
+            </div>
+            {/* Progress meter */}
+            {total > 0 && (
+              <div className="ml-auto flex items-center gap-[10px]">
+                <span className="text-[11.5px] font-semibold text-[var(--color-text-secondary)] tabular-nums">
+                  {complete}/{total}
+                </span>
+                <div
+                  className="rounded-full overflow-hidden"
+                  style={{ width: 80, height: 4, background: "var(--color-surface-2)" }}
+                >
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: total > 0 ? `${(complete / total) * 100}%` : "0%",
+                      background: "var(--color-accent)",
+                    }}
+                  />
+                </div>
+              </div>
             )}
           </div>
 
-          {/* No steps yet — initialising skeleton */}
-          {!hasSteps && (
-            <div className="px-4 py-3 flex flex-col gap-2.5">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="flex items-center gap-2.5 animate-pulse">
-                  <span className="w-2.5 h-2.5 rounded-full bg-slate-300 flex-shrink-0" />
-                  <span className="h-2.5 rounded-full bg-slate-300" style={{ width: `${60 + i * 22}px` }} />
+          {/* Skeleton rows while no steps yet */}
+          {!total && (
+            <div className="px-[14px] py-3 flex flex-col gap-2.5">
+              {[90, 68, 78].map((w, i) => (
+                <div key={i} className="flex items-center gap-3 animate-pulse">
+                  <span className="w-3 h-3 rounded-full bg-[var(--color-border-strong)] flex-shrink-0" />
+                  <span className="h-2.5 rounded-full bg-[var(--color-border)]" style={{ width: w }} />
                 </div>
               ))}
             </div>
           )}
 
-          {/* Step rows */}
-          {hasSteps && (
-            <div className="px-4 py-2 flex flex-col gap-0">
-              {steps.map((step, i) => {
-                const label = step.agent === "skeptic_review"
-                  ? "🔍 Second Opinion"
-                  : AGENT_LABELS[step.agent] ?? step.agent;
+          {/* Agent rows */}
+          {total > 0 && (
+            <div>
+              {steps.map((step) => {
                 const isSkeptic = step.agent === "skeptic_review";
+                const label = isSkeptic ? "Skeptic Review" : (AGENT_LABELS[step.agent] ?? step.agent);
+                const focus = AGENT_FOCUS[step.agent] ?? "";
+
                 return (
                   <div
                     key={step.agent}
-                    className={`flex items-center gap-2.5 py-1.5 ${
-                      i > 0 && isSkeptic ? "mt-1 pt-2.5 border-t border-amber-200/60" : ""
-                    }`}
+                    className="flex items-center gap-3 px-[14px] py-[9px]"
+                    style={{
+                      borderBottom: "1px solid var(--color-border)",
+                      borderTop: isSkeptic ? "1px solid color-mix(in oklab, #f59e0b 30%, transparent)" : undefined,
+                    }}
                   >
-                    {step.status === "running" && (
-                      <Spinner size={12} className={isSkeptic ? "border-amber-500 border-t-transparent" : ""} />
-                    )}
-                    {step.status === "complete" && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-emerald-500 flex-shrink-0">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    )}
-                    {step.status === "error" && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-red-400 flex-shrink-0">
-                        <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                      </svg>
-                    )}
-                    <span className={`text-xs font-medium ${
-                      step.status === "running"
-                        ? isSkeptic ? "text-amber-600" : "text-[var(--color-accent)]"
-                        : step.status === "complete"
-                        ? "text-[var(--color-text-secondary)]"
-                        : "text-red-400"
-                    }`}>
-                      {label}
+                    {/* Status icon */}
+                    <div className="flex justify-center" style={{ width: 16 }}>
+                      {step.status === "complete" && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-bull)" strokeWidth="3" strokeLinecap="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                      {step.status === "running" && <Spinner />}
+                      {step.status === "error" && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round">
+                          <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                      )}
+                      {step.status === "pending" && (
+                        <span
+                          className="inline-block rounded-full"
+                          style={{ width: 8, height: 8, border: "1.5px solid var(--color-border-strong)" }}
+                        />
+                      )}
+                    </div>
+
+                    {/* Name + focus */}
+                    <div className="flex-1 min-w-0 flex items-baseline gap-2">
+                      <span
+                        className="text-[12.5px] font-semibold"
+                        style={{ color: step.status === "pending" ? "var(--color-muted)" : "var(--color-text)" }}
+                      >
+                        {isSkeptic ? "🔍 " : ""}{label}
+                      </span>
+                      {focus && (
+                        <span className="text-[11px] text-[var(--color-muted)] truncate">{focus}</span>
+                      )}
+                    </div>
+
+                    {/* Status badge */}
+                    <span
+                      className="text-[9.5px] font-semibold uppercase tracking-[0.16em] flex-shrink-0"
+                      style={{
+                        color:
+                          step.status === "complete" ? "var(--color-bull)"
+                          : step.status === "running" ? "var(--color-accent)"
+                          : step.status === "error" ? "#f87171"
+                          : "var(--color-muted)",
+                      }}
+                    >
+                      {step.status === "complete" ? "complete"
+                        : step.status === "running" ? "analyzing"
+                        : step.status === "error" ? "error"
+                        : "queued"}
                     </span>
-                    {step.status === "running" && (
-                      <span className="text-[11px] text-slate-400 italic">Analyzing…</span>
-                    )}
-                    {step.status === "error" && step.error && (
-                      <span className="text-[11px] text-red-400 truncate max-w-[160px]">{step.error}</span>
-                    )}
                   </div>
                 );
               })}
             </div>
           )}
 
-          {/* Compiling footer */}
-          {isCompiling && (
-            <div className="px-4 py-2.5 border-t border-slate-200 flex items-center gap-2">
+          {/* Footer: compiling / synthesizing */}
+          {(isCompiling || (total > 0 && running > 0)) && (
+            <div
+              className="px-[14px] py-[10px] flex items-center gap-2"
+              style={{ background: "var(--color-surface)", borderTop: "1px solid var(--color-border)" }}
+            >
               <span className="flex gap-1">
-                {[0, 1, 2].map(i => (
-                  <span key={i} className="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]" style={{ animationDelay: `${i * 160}ms` }} />
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="typing-dot inline-block w-[6px] h-[6px] rounded-full"
+                    style={{ background: "var(--color-accent)", animationDelay: `${i * 160}ms` }}
+                  />
                 ))}
               </span>
-              <span className="text-[11px] text-slate-500 italic">Writing your report…</span>
+              <span className="text-[11.5px] italic text-[var(--color-text-secondary)] ml-1">
+                {isCompiling ? "CEO is synthesizing findings…" : "Agents running in parallel…"}
+              </span>
             </div>
           )}
         </div>
@@ -143,6 +209,176 @@ function AgentActivityInline({ steps, ceoThinking }: { steps: AgentStep[]; ceoTh
   );
 }
 
+/** One-line focus blurb shown next to each agent name */
+const AGENT_FOCUS: Record<string, string> = {
+  run_risk_agent:        "Beta, drawdown, correlation",
+  run_news_agent:        "Last 72h material headlines",
+  run_macro_agent:       "Rates, FX, growth backdrop",
+  run_technical_agent:   "Trend, support, momentum",
+  run_dcf_agent:         "Intrinsic value range",
+  run_earnings_agent:    "EPS trends, upcoming catalysts",
+  run_insider_agent:     "Form-4 activity & exec changes",
+  run_sentiment_agent:   "Social, news flow, options skew",
+  run_competitor_agent:  "Peer comparison",
+  run_options_agent:     "Options flow, put/call ratio",
+  run_comparables_agent: "Peer multiples & relative value",
+  run_graham_agent:      "Benjamin Graham scorecard",
+  run_analyst_agent:     "Wall Street price targets",
+  run_hype_agent:        "Reddit, X, YouTube momentum",
+  run_fundamentals_agent:"Revenue, margins, FCF trends",
+  skeptic_review:        "Stress-test the thesis",
+};
+
+/* ── Market Pulse strip ──────────────────────────────────────────────────── */
+function MarketPulse() {
+  const { items, isLoading } = useMarketPulse();
+
+  return (
+    <div
+      className="rounded-[var(--radius-md)] px-[16px] py-[12px] mb-6"
+      style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
+    >
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-[10px]">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
+          Market Pulse · Live
+        </span>
+        <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-muted)]">
+          <span
+            className="inline-block w-[6px] h-[6px] rounded-full"
+            style={{
+              background: "var(--color-bull)",
+              boxShadow: "0 0 0 3px color-mix(in oklab, var(--color-bull) 22%, transparent)",
+            }}
+          />
+          {isLoading ? "Loading…" : "Open"}
+        </span>
+      </div>
+
+      {/* Ticker grid */}
+      <div className="grid gap-[14px]" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
+        {items.map((item) => {
+          const up = item.chg >= 0;
+          return (
+            <div key={item.ticker}>
+              <p
+                className="text-[10.5px] font-semibold uppercase tracking-[0.16em] mb-1"
+                style={{ color: "var(--color-muted)" }}
+              >
+                {item.label}
+              </p>
+              <p
+                className="text-[15px] font-semibold leading-[1.1] tabular-nums"
+                style={{ color: "var(--color-text)" }}
+              >
+                {isLoading ? (
+                  <span
+                    className="inline-block h-[15px] w-16 rounded animate-pulse"
+                    style={{ background: "var(--color-border)" }}
+                  />
+                ) : (
+                  item.value
+                )}
+              </p>
+              {!isLoading && item.chg !== 0 && (
+                <p
+                  className="text-[11.5px] font-semibold mt-[2px] tabular-nums"
+                  style={{ color: up ? "var(--color-bull)" : "var(--color-bear)" }}
+                >
+                  {up ? "+" : ""}{item.chg.toFixed(2)}%
+                </p>
+              )}
+              {isLoading && (
+                <span
+                  className="inline-block h-[11px] w-10 rounded mt-1 animate-pulse"
+                  style={{ background: "var(--color-border)" }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+function EmptyState({ onSuggestion }: { onSuggestion?: (text: string) => void }) {
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  return (
+    <div className="flex-1 overflow-y-auto px-8 py-8">
+      <div className="max-w-[700px] mx-auto">
+        {/* Greeting headline */}
+        <div className="mb-6">
+          <p
+            className="text-[13px] italic mb-1.5"
+            style={{ fontFamily: "var(--font-serif)", color: "var(--color-muted)" }}
+          >
+            {greeting}
+          </p>
+          <h2
+            className="m-0 text-[32px] font-bold leading-[1.1] text-[var(--color-text)]"
+            style={{ fontFamily: "var(--font-serif)", letterSpacing: "-0.015em" }}
+          >
+            What would you like<br />to research today?
+          </h2>
+        </div>
+
+        <MarketPulse />
+
+        {/* Suggestion tiles */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
+              Starter prompts
+            </span>
+            <span className="text-[11px] text-[var(--color-muted)]">Tailored to your book</span>
+          </div>
+          <div className="grid grid-cols-2 gap-[10px]">
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s.text}
+                onClick={() => onSuggestion?.(s.text)}
+                className="text-left px-[16px] py-[14px] rounded-[12px] flex gap-[10px] items-start transition-all duration-120 group"
+                style={{
+                  background: "var(--color-bg)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-secondary)",
+                  fontSize: "13.5px",
+                  lineHeight: 1.4,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--color-accent-medium)";
+                  e.currentTarget.style.background = "var(--color-accent-light)";
+                  e.currentTarget.style.color = "var(--color-accent)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--color-border)";
+                  e.currentTarget.style.background = "var(--color-bg)";
+                  e.currentTarget.style.color = "var(--color-text-secondary)";
+                }}
+              >
+                <span
+                  className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] px-[7px] py-[3px] rounded-[5px] mt-[1px]"
+                  style={{ background: "var(--color-accent-light)", color: "var(--color-accent)" }}
+                >
+                  {s.tag}
+                </span>
+                <span className="flex-1">{s.text}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Main MessageList ─────────────────────────────────────────────────────── */
 interface Props {
   messages: ChatMessage[];
   isStreaming: boolean;
@@ -153,10 +389,17 @@ interface Props {
   ceoThinking?: string;
 }
 
-export default function MessageList({ messages, isStreaming, streamingContent, mode, onSuggestion, agentSteps = [], ceoThinking }: Props) {
+export default function MessageList({
+  messages,
+  isStreaming,
+  streamingContent,
+  mode,
+  onSuggestion,
+  agentSteps = [],
+  ceoThinking,
+}: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Show agent activity panel as soon as we start streaming in agent mode (before any steps arrive)
   const showAgentActivity = mode === "agent" && isStreaming && !streamingContent;
   const showStreaming = isStreaming && !!streamingContent;
 
@@ -164,69 +407,47 @@ export default function MessageList({ messages, isStreaming, streamingContent, m
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, streamingContent, agentSteps.length, ceoThinking, isStreaming]);
 
+  /* Empty state */
   if (!messages.length && !isStreaming) {
-    return (
-      <div className="flex-1 overflow-y-auto flex items-center justify-center px-6">
-        <div className="w-full max-w-[520px]">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-2xl bg-[var(--color-accent)] flex items-center justify-center shadow-md shadow-blue-900/20">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                <polyline points="16 7 22 7 22 13" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-[var(--color-text)]">Lucra Research</h1>
-              <p className="text-sm text-[var(--color-muted)]">AI-powered portfolio analysis</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s}
-                onClick={() => onSuggestion?.(s)}
-                className="text-left px-4 py-3 rounded-xl border border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] hover:border-[var(--color-accent-medium)] hover:bg-[var(--color-accent-light)] hover:text-[var(--color-accent)] transition-all duration-150"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <EmptyState onSuggestion={onSuggestion} />;
   }
 
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-[740px] px-4 py-8 flex flex-col gap-7">
-        {messages.map((msg) => <Message key={msg.id} message={msg} />)}
+        {messages.map((msg) => (
+          <Message key={msg.id} message={msg} />
+        ))}
 
-        {/* Agent activity panel — shows immediately on submit, stays until streaming starts */}
+        {/* Agent activity panel */}
         {showAgentActivity && (
-          <AgentActivityInline steps={agentSteps} ceoThinking={ceoThinking} />
+          <AgentActivityPanel steps={agentSteps} ceoThinking={ceoThinking} />
         )}
 
-        {/* Streaming response (both modes) */}
+        {/* Streaming response */}
         {showStreaming && (
-          <div className="flex gap-3">
-            <LucraIcon />
-            <div className="flex-1 min-w-0 pt-0.5">
+          <div className="flex gap-[14px]">
+            <LucraAvatar />
+            <div className="flex-1 min-w-0 pt-1">
               <Markdown>{streamingContent}</Markdown>
-              <span className="inline-block w-0.5 h-[1.1em] bg-[var(--color-accent)] animate-pulse align-text-bottom ml-0.5" />
+              <span
+                className="inline-block w-0.5 h-[1.1em] animate-pulse align-text-bottom ml-0.5"
+                style={{ background: "var(--color-accent)" }}
+              />
             </div>
           </div>
         )}
 
         {/* Simple mode waiting dots */}
         {mode === "simple" && isStreaming && !streamingContent && (
-          <div className="flex gap-3 items-start">
-            <LucraIcon />
+          <div className="flex gap-[14px] items-start">
+            <LucraAvatar />
             <div className="pt-2 flex items-center gap-1.5">
-              {[0, 1, 2].map(i => (
+              {[0, 1, 2].map((i) => (
                 <span
                   key={i}
-                  className="typing-dot w-2 h-2 rounded-full bg-[var(--color-accent)]"
-                  style={{ animationDelay: `${i * 160}ms` }}
+                  className="typing-dot inline-block w-2 h-2 rounded-full"
+                  style={{ background: "var(--color-accent)", animationDelay: `${i * 160}ms` }}
                 />
               ))}
             </div>
