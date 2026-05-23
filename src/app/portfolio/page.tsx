@@ -79,12 +79,13 @@ export default function PortfolioPage() {
     return { holding: h, quote, mv, pct: 0, gainLoss, gainLossPct };
   });
 
-  const totalValue = rows.reduce((s, r) => s + r.mv, 0);
+  const equityValue = rows.reduce((s, r) => s + r.mv, 0);
+  const totalAccountValue = equityValue + cashBalance;
   const totalCost = holdings.reduce((s, h) => s + h.avgCost * h.shares, 0);
-  const totalGain = totalValue - totalCost;
+  const totalGain = equityValue - totalCost;
   const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
-  rows.forEach((r) => { r.pct = totalValue > 0 ? (r.mv / totalValue) * 100 : 0; });
+  rows.forEach((r) => { r.pct = equityValue > 0 ? (r.mv / equityValue) * 100 : 0; });
 
   // Build donut segments — 3° gap between each slice for clean separation
   const GAP = rows.length > 1 ? 3 : 0;
@@ -119,7 +120,7 @@ export default function PortfolioPage() {
     <div className="flex flex-col h-full overflow-hidden" style={{ background: "var(--color-bg)" }}>
       {/* Topbar */}
       <div
-        className="flex-shrink-0 flex items-center justify-between px-7 py-3"
+        className="flex-shrink-0 flex items-center justify-between px-7 h-[52px]"
         style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-bg)" }}
       >
         <div className="flex items-baseline gap-3.5">
@@ -129,7 +130,7 @@ export default function PortfolioPage() {
           >
             As of {timeLabel} ET · {dateLabel}
           </span>
-          <h1 className="m-0 text-[15px] font-semibold text-[var(--color-text)]">Portfolio</h1>
+          <h1 className="m-0 text-[15px] font-semibold text-[var(--color-text)]" style={{ fontFamily: "var(--font-serif)" }}>Portfolio</h1>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -184,16 +185,16 @@ export default function PortfolioPage() {
               alignItems: "center",
             }}
           >
-            {/* Total Value */}
+            {/* Total Account Value */}
             <div>
               <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)] mb-1.5">
-                Total Value
+                Total Account Value
               </p>
               <p
                 className="text-[30px] font-bold leading-[1.05] tabular-nums text-[var(--color-text)]"
                 style={{ fontFamily: "var(--font-serif)", letterSpacing: "-0.015em" }}
               >
-                ${totalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                ${totalAccountValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}
               </p>
               <p className="text-[12px] mt-1 tabular-nums text-[var(--color-muted)]">
                 {holdings.length} positions · {cashBalance > 0 ? `$${fmt(cashBalance, 0)} cash` : "no cash"}
@@ -291,7 +292,7 @@ export default function PortfolioPage() {
                 style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
               >
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)] mb-[14px]">Allocation</p>
-                <div className="flex items-start gap-5">
+                <div className="flex items-center justify-center gap-5">
                   <svg width="200" height="200" viewBox="0 0 200 200" className="flex-shrink-0">
                     {segments.map((seg) => (
                       <path
@@ -304,13 +305,13 @@ export default function PortfolioPage() {
                         onMouseLeave={() => setHoveredTicker(null)}
                       />
                     ))}
-                    <text x="100" y="93" textAnchor="middle" fontSize="10" fill="var(--color-muted)" fontWeight="600" letterSpacing="0.18em">EQUITY</text>
-                    <text x="100" y="112" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--color-text)" fontFamily="var(--font-serif)">
-                      ${totalValue >= 1000 ? fmt(totalValue / 1000, 1) + "k" : fmt(totalValue, 0)}
+                    <text x="90" y="82" textAnchor="middle" fontSize="10" fill="var(--color-muted)" fontWeight="600" letterSpacing="0.18em">EQUITY</text>
+                    <text x="90" y="100" textAnchor="middle" fontSize="22" fontWeight="700" fill="var(--color-text)" fontFamily="var(--font-serif)">
+                      ${totalAccountValue >= 1000 ? fmt(totalAccountValue / 1000, 1) + "k" : fmt(totalAccountValue, 0)}
                     </text>
                   </svg>
                   {/* Legend */}
-                  <div className="flex flex-col gap-1 pt-1 min-w-0 flex-1">
+                  <div className="flex flex-col gap-1 min-w-[100px]">
                     {rows.map((r, i) => (
                       <div
                         key={r.holding.ticker}
@@ -451,10 +452,10 @@ export default function PortfolioPage() {
 
       {/* Ask bar */}
       <div
-        className="flex-shrink-0 px-8 pb-6 pt-3"
+        className="flex-shrink-0 px-6 pb-6 pt-5"
         style={{ background: "linear-gradient(to bottom, transparent 0%, var(--color-bg) 28%)" }}
       >
-        <form onSubmit={handleAsk} className="max-w-[740px] mx-auto">
+        <form onSubmit={handleAsk} className="max-w-[720px] mx-auto">
           <div
             className="relative flex transition-all duration-200"
             style={{

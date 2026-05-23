@@ -58,7 +58,10 @@ export async function getRecentFilings(cik: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function pickLatestAnnual(us: any, key: string): number | null {
   const units = us[key]?.units?.USD ?? us[key]?.units?.shares ?? [];
-  const annual = units.filter((u: { form: string }) => u.form === "10-K");
+  const annual = units.filter(
+    (u: { form: string; frame?: string }) =>
+      u.form === "10-K" && (!u.frame || /^CY\d{4}$/.test(u.frame) || u.frame.endsWith("I"))
+  );
   return annual.at(-1)?.val ?? null;
 }
 
@@ -91,8 +94,12 @@ export interface YearlyMetric {
 function extractAnnualSeries(us: any, ...keys: string[]): YearlyMetric[] {
   for (const key of keys) {
     const units = us[key]?.units?.USD ?? us[key]?.units?.shares ?? [];
-    const annual: { end: string; val: number; form: string; filed: string }[] = units.filter(
-      (u: { form: string }) => u.form === "10-K"
+    // Exclude quarterly-period frames (e.g. "CY2024Q4") — 10-Ks include supplemental
+    // quarterly figures under the same form type, which corrupts annual time series.
+    // Keep: no frame, pure calendar-year frames ("CY2024"), and instantaneous snapshots ("CY2024Q4I").
+    const annual: { end: string; val: number; form: string; filed: string; frame?: string }[] = units.filter(
+      (u: { form: string; frame?: string }) =>
+        u.form === "10-K" && (!u.frame || /^CY\d{4}$/.test(u.frame) || u.frame.endsWith("I"))
     );
     if (!annual.length) continue;
 

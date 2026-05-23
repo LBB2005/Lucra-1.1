@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Markdown from "./Markdown";
 import Message from "./Message";
+import AgentDetailModal from "@/components/agent/AgentDetailModal";
 import { AGENT_LABELS } from "@/types/chat";
 import type { ChatMessage, ChatMode, AgentStep } from "@/types/chat";
 import { useMarketPulse } from "@/hooks/useMarketPulse";
@@ -38,13 +39,40 @@ function Spinner() {
 
 /* ── Agent activity panel ("Research crew") ─────────────────────────────── */
 function AgentActivityPanel({ steps, ceoThinking }: { steps: AgentStep[]; ceoThinking?: string }) {
+  const [detailStep, setDetailStep] = useState<AgentStep | null>(null);
   const complete  = steps.filter((s) => s.status === "complete").length;
   const running   = steps.filter((s) => s.status === "running").length;
   const total     = steps.length;
   const isCompiling = ceoThinking === "Compiling all reports…";
 
   return (
-    <div className="flex gap-[14px]">
+    <>
+      {detailStep && (
+        <AgentDetailModal step={detailStep} onClose={() => setDetailStep(null)} />
+      )}
+
+      {/* Mobile compact bar */}
+      <div
+        className="flex sm:hidden items-center gap-3 px-4 py-3 rounded-[var(--radius-md)] fade-in"
+        style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+      >
+        <span className="flex gap-1 flex-shrink-0">
+          {[0, 1, 2].map((i) => (
+            <span key={i} className="typing-dot inline-block w-[5px] h-[5px] rounded-full" style={{ background: "var(--color-accent)", animationDelay: `${i * 160}ms` }} />
+          ))}
+        </span>
+        <span className="flex-1 text-[12px] text-[var(--color-text-secondary)]">
+          {!total ? "Deploying agents…" : running > 0 ? `${running} agent${running > 1 ? "s" : ""} analyzing…` : `${complete} of ${total} complete`}
+        </span>
+        {total > 0 && (
+          <div className="rounded-full overflow-hidden flex-shrink-0" style={{ width: 60, height: 3, background: "var(--color-surface-2)" }}>
+            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${total > 0 ? (complete / total) * 100 : 0}%`, background: "var(--color-accent)" }} />
+          </div>
+        )}
+      </div>
+
+      {/* Desktop full panel */}
+      <div className="hidden sm:flex gap-[14px]">
       <LucraAvatar />
       <div className="flex-1 min-w-0 pt-0">
         <div
@@ -161,22 +189,32 @@ function AgentActivityPanel({ steps, ceoThinking }: { steps: AgentStep[]; ceoThi
                       )}
                     </div>
 
-                    {/* Status badge */}
-                    <span
-                      className="text-[9.5px] font-semibold uppercase tracking-[0.16em] flex-shrink-0"
-                      style={{
-                        color:
-                          step.status === "complete" ? "var(--color-bull)"
-                          : step.status === "running" ? "var(--color-accent)"
-                          : step.status === "error" ? "#f87171"
-                          : "var(--color-muted)",
-                      }}
-                    >
-                      {step.status === "complete" ? "complete"
-                        : step.status === "running" ? "analyzing"
-                        : step.status === "error" ? "error"
-                        : "queued"}
-                    </span>
+                    {/* Status badge / view full button */}
+                    {(step.status === "complete" || step.status === "error") && step.result ? (
+                      <button
+                        onClick={() => setDetailStep(step)}
+                        className="text-[9.5px] font-semibold uppercase tracking-[0.1em] flex-shrink-0 px-[7px] py-[3px] rounded-[5px] transition-colors duration-100"
+                        style={{ background: "var(--color-accent-light)", color: "var(--color-accent)", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+                      >
+                        View
+                      </button>
+                    ) : (
+                      <span
+                        className="text-[9.5px] font-semibold uppercase tracking-[0.16em] flex-shrink-0"
+                        style={{
+                          color:
+                            step.status === "complete" ? "var(--color-bull)"
+                            : step.status === "running" ? "var(--color-accent)"
+                            : step.status === "error" ? "#f87171"
+                            : "var(--color-muted)",
+                        }}
+                      >
+                        {step.status === "complete" ? "complete"
+                          : step.status === "running" ? "analyzing"
+                          : step.status === "error" ? "error"
+                          : "queued"}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -205,7 +243,8 @@ function AgentActivityPanel({ steps, ceoThinking }: { steps: AgentStep[]; ceoThi
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -310,8 +349,8 @@ function EmptyState({ onSuggestion }: { onSuggestion?: (text: string) => void })
     hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-8">
-      <div className="max-w-[700px] mx-auto">
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-[720px] mx-auto px-4 py-8">
         {/* Greeting headline */}
         <div className="mb-6">
           <p
@@ -414,9 +453,9 @@ export default function MessageList({
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-[740px] px-4 py-8 flex flex-col gap-7">
+      <div className="mx-auto max-w-[720px] px-4 py-8 flex flex-col gap-7">
         {messages.map((msg) => (
-          <Message key={msg.id} message={msg} />
+          <Message key={msg.id} message={msg} onSuggestion={onSuggestion} />
         ))}
 
         {/* Agent activity panel */}

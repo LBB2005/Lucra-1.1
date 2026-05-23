@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
@@ -71,10 +71,31 @@ const components: Components = {
     );
   },
 
-  // Headings — clear hierarchy
-  h1: ({ children }) => <h1 className="text-[1.15rem] font-bold text-[var(--color-text)] mt-6 mb-2 pb-1.5 border-b border-[var(--color-border)]">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-[1.05rem] font-semibold text-[var(--color-text)] mt-5 mb-2">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-[0.95rem] font-semibold text-[var(--color-text-secondary)] mt-4 mb-1.5">{children}</h3>,
+  // Headings — serif editorial style per design spec
+  h1: ({ children }) => (
+    <h1
+      style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", fontWeight: 700, letterSpacing: "-0.012em", lineHeight: 1.28 }}
+      className="text-[var(--color-text)] mt-6 mb-2 pb-1.5 border-b border-[var(--color-border)]"
+    >
+      {children}
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2
+      style={{ fontFamily: "var(--font-serif)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.012em", lineHeight: 1.28 }}
+      className="text-[var(--color-text)] mt-5 mb-2"
+    >
+      {children}
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3
+      style={{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.008em", lineHeight: 1.3 }}
+      className="text-[var(--color-text-secondary)] mt-4 mb-1.5"
+    >
+      {children}
+    </h3>
+  ),
 
   // Lists
   ul: ({ children }) => <ul className="list-disc pl-5 my-2 space-y-1 text-[var(--color-text)]">{children}</ul>,
@@ -109,11 +130,12 @@ const components: Components = {
 interface Props {
   children: string;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export default function Markdown({ children, className = "" }: Props) {
+export default function Markdown({ children, className = "", style }: Props) {
   return (
-    <div className={`markdown-body ${className}`}>
+    <div className={`markdown-body ${className}`} style={style}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {children}
       </ReactMarkdown>

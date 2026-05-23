@@ -11,11 +11,16 @@ interface ChatState {
   agentSteps: AgentStep[];
   ceoThinking: string;
   pendingCritique: string;
+  // ID of the conversation whose stream is currently running (survives navigation)
+  streamingConversationId: string | null;
 
   pendingMessage: string;
+  pendingFollowups: string[];
   setPendingMessage: (msg: string) => void;
   setPendingCritique: (c: string) => void;
+  setPendingFollowups: (q: string[]) => void;
   setConversationId: (id: string | null) => void;
+  setStreamingConversationId: (id: string | null) => void;
   setMode: (mode: ChatMode) => void;
   addMessage: (msg: ChatMessage) => void;
   setMessages: (msgs: ChatMessage[]) => void;
@@ -31,18 +36,22 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>((set) => ({
   pendingMessage: "",
-  setPendingMessage: (msg) => set({ pendingMessage: msg }),
+  pendingFollowups: [],
   pendingCritique: "",
+  setPendingMessage: (msg) => set({ pendingMessage: msg }),
   setPendingCritique: (c) => set({ pendingCritique: c }),
+  setPendingFollowups: (q) => set({ pendingFollowups: q }),
   conversationId: null,
   messages: [],
-  mode: "simple",
+  mode: "agent",
   isStreaming: false,
   streamingContent: "",
   agentSteps: [],
   ceoThinking: "",
+  streamingConversationId: null,
 
   setConversationId: (id) => set({ conversationId: id }),
+  setStreamingConversationId: (id) => set({ streamingConversationId: id }),
   setMode: (mode) => set({ mode }),
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
   setMessages: (msgs) => set({ messages: msgs }),
@@ -68,5 +77,6 @@ export const useChatStore = create<ChatState>((set) => ({
       agentSteps: [],
       ceoThinking: "",
       pendingCritique: "",
+      pendingFollowups: [],
     }),
 }));

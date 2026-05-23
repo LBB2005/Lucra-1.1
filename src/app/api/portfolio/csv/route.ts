@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/firebase-admin";
+import { requireAuth } from "@/lib/requireAuth";
 import { parseBrokerCsv } from "@/lib/csv-parser";
 
 export async function POST(req: Request) {
+  const { userId, error } = await requireAuth();
+  if (error) return error;
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -18,25 +21,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No valid holdings found in CSV" }, { status: 400 });
     }
 
+    const holdingsCol = db.collection("users").doc(userId).collection("holdings");
+    const now = new Date().toISOString();
+
     const results = await Promise.allSettled(
-      holdings.map((h) =>
-        prisma.holding.upsert({
-          where: { ticker: h.ticker },
-          update: {
+      holdings.map(async (h) => {
+        const docRef = holdingsCol.doc(h.ticker);
+        const existing = await docRef.get();
+        if (existing.exists) {
+          await docRef.update({
             shares: h.shares,
             avgCost: h.avgCost,
             ...(h.companyName && { companyName: h.companyName }),
             ...(h.sector && { sector: h.sector }),
-          },
-          create: {
+            updatedAt: now,
+          });
+        } else {
+          await docRef.set({
+            userId,
             ticker: h.ticker,
             shares: h.shares,
             avgCost: h.avgCost,
             companyName: h.companyName ?? null,
             sector: h.sector ?? null,
-          },
-        })
-      )
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      })
     );
 
     const imported = results.filter((r) => r.status === "fulfilled").length;

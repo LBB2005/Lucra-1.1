@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef } from "react";
+import { authFetch } from "@/lib/authFetch";
 
 interface ExtractedHolding {
   ticker: string;
@@ -10,7 +11,7 @@ interface ExtractedHolding {
 
 interface Props {
   onClose: () => void;
-  onAdd: (holdings: ExtractedHolding[]) => Promise<void>;
+  onAdd: (holdings: ExtractedHolding[], buyingPower: number | null, replace: boolean) => Promise<void>;
 }
 
 export default function StatementUploadModal({ onClose, onAdd }: Props) {
@@ -18,6 +19,9 @@ export default function StatementUploadModal({ onClose, onAdd }: Props) {
   const [step, setStep] = useState<"upload" | "scanning" | "review" | "adding" | "error">("upload");
   const [extracted, setExtracted] = useState<ExtractedHolding[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [buyingPower, setBuyingPower] = useState<number | null>(null);
+  const [buyingPowerInput, setBuyingPowerInput] = useState("");
+  const [replaceMode, setReplaceMode] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,12 +38,15 @@ export default function StatementUploadModal({ onClose, onAdd }: Props) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/portfolio/statement", { method: "POST", body: fd });
+      const res = await authFetch("/api/portfolio/statement", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Scan failed");
       const holdings: ExtractedHolding[] = data.holdings;
+      const bp: number | null = typeof data.buyingPower === "number" ? data.buyingPower : null;
       setExtracted(holdings);
       setSelected(new Set(holdings.map((_, i) => i)));
+      setBuyingPower(bp);
+      setBuyingPowerInput(bp != null ? String(bp) : "");
       setStep("review");
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Scan failed");
@@ -50,7 +57,10 @@ export default function StatementUploadModal({ onClose, onAdd }: Props) {
   async function confirm() {
     setStep("adding");
     const toAdd = extracted.filter((_, i) => selected.has(i));
-    await onAdd(toAdd);
+    const bp = buyingPowerInput.trim() !== ""
+      ? (parseFloat(buyingPowerInput.replace(/,/g, "")) || null)
+      : buyingPower;
+    await onAdd(toAdd, bp, replaceMode);
     onClose();
   }
 
@@ -152,6 +162,37 @@ export default function StatementUploadModal({ onClose, onAdd }: Props) {
 
           {step === "review" && (
             <div className="flex flex-col gap-3">
+              {/* Replace / Add toggle */}
+              <div
+                className="flex rounded-lg overflow-hidden text-xs font-medium"
+                style={{ border: "1px solid var(--color-border)" }}
+              >
+                <button
+                  onClick={() => setReplaceMode(true)}
+                  className="flex-1 py-1.5 transition-colors duration-100"
+                  style={{
+                    background: replaceMode ? "var(--color-accent)" : "transparent",
+                    color: replaceMode ? "white" : "var(--color-text-secondary)",
+                  }}
+                >
+                  Replace portfolio
+                </button>
+                <button
+                  onClick={() => setReplaceMode(false)}
+                  className="flex-1 py-1.5 transition-colors duration-100"
+                  style={{
+                    background: !replaceMode ? "var(--color-accent)" : "transparent",
+                    color: !replaceMode ? "white" : "var(--color-text-secondary)",
+                  }}
+                >
+                  Add to portfolio
+                </button>
+              </div>
+              {replaceMode && (
+                <p className="text-[10.5px] text-[var(--color-muted)] -mt-1">
+                  Existing holdings not in this statement will be removed.
+                </p>
+              )}
               <p className="text-xs text-[var(--color-muted)]">{extracted.length} holdings found — deselect any you don&apos;t want</p>
               <div className="max-h-64 overflow-y-auto flex flex-col gap-1">
                 {extracted.map((h, i) => (
@@ -166,6 +207,24 @@ export default function StatementUploadModal({ onClose, onAdd }: Props) {
                   </label>
                 ))}
               </div>
+              {/* Buying power row */}
+              <div
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg"
+                style={{ border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-[var(--color-muted)] flex-shrink-0">
+                  <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+                </svg>
+                <span className="text-xs font-semibold text-[var(--color-text-secondary)] flex-1">Buying Power</span>
+                <span className="text-[10px] text-[var(--color-muted)] mr-1">$</span>
+                <input
+                  type="text"
+                  value={buyingPowerInput}
+                  onChange={(e) => setBuyingPowerInput(e.target.value)}
+                  placeholder={buyingPower != null ? String(buyingPower) : "not detected"}
+                  className="w-28 text-right text-xs font-medium bg-transparent border-b border-[var(--color-border)] focus:border-[var(--color-accent)] focus:outline-none text-[var(--color-text)] tabular-nums"
+                />
+              </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setStep("upload")} className="flex-1 py-2 rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] transition-colors">
                   Re-scan
@@ -175,7 +234,7 @@ export default function StatementUploadModal({ onClose, onAdd }: Props) {
                   disabled={selected.size === 0}
                   className="flex-1 py-2 rounded-xl bg-[var(--color-accent)] text-white text-xs font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
                 >
-                  Add {selected.size} holding{selected.size !== 1 ? "s" : ""}
+                  {replaceMode ? "Replace portfolio" : `Add ${selected.size} holding${selected.size !== 1 ? "s" : ""}`}
                 </button>
               </div>
             </div>

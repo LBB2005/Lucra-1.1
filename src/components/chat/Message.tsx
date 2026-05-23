@@ -1,160 +1,690 @@
 "use client";
-import { useState } from "react";
+import React, { useState, Component } from "react";
 import Markdown from "./Markdown";
+
+class MessageErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: "12px 16px", borderRadius: 10, border: "1px solid var(--color-border)", background: "var(--color-surface)", color: "var(--color-muted)", fontSize: 13 }}>
+          This message could not be rendered.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+import AgentDetailModal from "@/components/agent/AgentDetailModal";
 import { AGENT_LABELS } from "@/types/chat";
 import type { ChatMessage, AgentStep } from "@/types/chat";
+import BacktestResult from "./BacktestResult";
+import type { BacktestResult as BacktestResultType } from "@/app/api/backtest/route";
 
-function LucraIcon({ size = 28 }: { size?: number }) {
+/* ── Agent focus blurbs (mirrors MessageList) ────────────────────────── */
+const AGENT_FOCUS: Record<string, string> = {
+  run_risk_agent:         "Beta, drawdown, correlation",
+  run_news_agent:         "Last 72h material headlines",
+  run_macro_agent:        "Rates, FX, growth backdrop",
+  run_technical_agent:    "Trend, support, momentum",
+  run_dcf_agent:          "Intrinsic value range",
+  run_earnings_agent:     "EPS trends, upcoming catalysts",
+  run_insider_agent:      "Form-4 activity & exec changes",
+  run_sentiment_agent:    "Social, news flow, options skew",
+  run_competitor_agent:   "Peer comparison",
+  run_options_agent:      "Options flow, put/call ratio",
+  run_comparables_agent:  "Peer multiples & relative value",
+  run_graham_agent:       "Benjamin Graham scorecard",
+  run_analyst_agent:      "Wall Street price targets",
+  run_hype_agent:         "Reddit, X, YouTube momentum",
+  run_fundamentals_agent: "Revenue, margins, FCF trends",
+  skeptic_review:         "Stress-test the thesis",
+};
+
+/* Short display names for ribbon pills */
+const AGENT_SHORT: Record<string, string> = {
+  run_risk_agent:         "Ri",
+  run_news_agent:         "Ne",
+  run_macro_agent:        "Ma",
+  run_technical_agent:    "Te",
+  run_dcf_agent:          "DC",
+  run_earnings_agent:     "Ea",
+  run_insider_agent:      "In",
+  run_sentiment_agent:    "Se",
+  run_competitor_agent:   "Co",
+  run_options_agent:      "Op",
+  run_comparables_agent:  "Cm",
+  run_graham_agent:       "Gr",
+  run_analyst_agent:      "An",
+  run_hype_agent:         "Hy",
+  run_fundamentals_agent: "Fu",
+  skeptic_review:         "Sk",
+};
+
+/* ── AgentRibbon — collapsed bar + expandable thinking panel ─────────── */
+function AgentRibbon({ steps }: { steps: AgentStep[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const [detailStep, setDetailStep] = useState<AgentStep | null>(null);
+
+  const completed = steps.filter((s) => s.status === "complete").length;
+  const total = steps.length;
+  const pillSteps = steps.slice(0, 6);
+  const extra = steps.length - 6;
+
   return (
     <div
-      className="rounded-xl bg-[var(--color-accent)] flex items-center justify-center flex-shrink-0"
-      style={{ width: size, height: size }}
+      style={{
+        background: expanded ? "var(--color-bg)" : "var(--color-surface)",
+        border: `1px solid ${expanded ? "var(--color-border-strong)" : "var(--color-border)"}`,
+        borderRadius: 12,
+        overflow: "hidden",
+        transition: "border-color 200ms, background 200ms",
+      }}
     >
-      <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-        <polyline points="16 7 22 7 22 13" />
-      </svg>
-    </div>
-  );
-}
-
-function AgentTraceRow({ step, expanded, onToggle }: { step: AgentStep; expanded: boolean; onToggle: () => void }) {
-  const label = AGENT_LABELS[step.agent] ?? step.agent;
-  return (
-    <div className="flex flex-col">
       <button
-        onClick={onToggle}
-        className="flex items-center gap-2 py-1 text-left group"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "11px 14px",
+          background: "transparent",
+          border: "none",
+          font: "inherit",
+          textAlign: "left",
+          cursor: "pointer",
+          transition: "background 140ms",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background =
+            "color-mix(in oklab, var(--color-accent) 4%, transparent)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+        }}
       >
-        {step.status === "complete" && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-emerald-500 flex-shrink-0">
-            <polyline points="20 6 9 17 4 12" />
+        {/* Stack glyph */}
+        <span
+          style={{
+            width: 22, height: 22,
+            borderRadius: 6,
+            background: "var(--color-accent)",
+            color: "white",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+            <path d="M2 17l10 5 10-5" />
+            <path d="M2 12l10 5 10-5" />
           </svg>
-        )}
-        {step.status === "error" && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-red-400 flex-shrink-0">
-            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-        )}
-        <span className="text-[11px] font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text)] transition-colors duration-100">
-          {label}
         </span>
-        {step.status === "complete" && step.result && (
+
+        {/* Titles */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--color-text)" }}>
+            Research crew
+          </div>
+          <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 1 }}>
+            {completed} of {total} agents complete
+          </div>
+        </div>
+
+        {/* 2-letter agent pills */}
+        <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
+          {pillSteps.map((step) => (
+            <span
+              key={step.agent}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: 22, height: 18,
+                padding: "0 5px",
+                background: "var(--color-bg)",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text-secondary)",
+                borderRadius: 99,
+                fontSize: "9.5px",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+              }}
+            >
+              {AGENT_SHORT[step.agent] ?? (AGENT_LABELS[step.agent as keyof typeof AGENT_LABELS] ?? step.agent).slice(0, 2)}
+            </span>
+          ))}
+          {extra > 0 && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: 22, height: 18,
+                padding: "0 5px",
+                background: "var(--color-accent-light)",
+                color: "var(--color-accent)",
+                borderRadius: 99,
+                fontSize: "9.5px",
+                fontWeight: 700,
+              }}
+            >
+              +{extra}
+            </span>
+          )}
+        </span>
+
+        {/* View thinking toggle */}
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            color: "var(--color-accent)",
+            fontSize: "11.5px",
+            fontWeight: 600,
+            padding: "4px 8px",
+            borderRadius: 6,
+            background: "var(--color-accent-light)",
+            flexShrink: 0,
+          }}
+        >
+          {expanded ? "Hide thinking" : "View thinking"}
           <svg
-            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-            className={`ml-auto text-[var(--color-muted)] transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
+            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"
+            style={{ transition: "transform 200ms", transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
-        )}
-        {step.status === "error" && (
-          <span className="ml-auto text-[10px] text-red-400">error</span>
-        )}
+        </span>
       </button>
-      {expanded && step.result && (
-        <div className="ml-5 pl-3 border-l border-[var(--color-border)] mb-1">
-          <p className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap">
-            {step.result.slice(0, 600)}{step.result.length > 600 ? "…" : ""}
-          </p>
-        </div>
+
+      {detailStep && (
+        <AgentDetailModal step={detailStep} onClose={() => setDetailStep(null)} />
       )}
-      {expanded && step.error && (
-        <p className="ml-5 text-[11px] text-red-400 mb-1">{step.error}</p>
+
+      {/* Thinking panel */}
+      {expanded && (
+        <div
+          style={{
+            borderTop: "1px solid var(--color-border)",
+            background: "var(--color-bg)",
+            padding: "16px 16px 14px",
+            animation: "thinking-fadein 220ms ease-out",
+          }}
+        >
+          {/* Header */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: 12,
+              padding: "0 4px",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "9.5px",
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: "var(--color-accent)",
+                fontWeight: 700,
+              }}
+            >
+              Thinking trace · {total} agents
+            </span>
+            <span
+              style={{
+                fontSize: "10.5px",
+                color: "var(--color-muted)",
+                fontStyle: "italic",
+                fontFamily: "var(--font-serif)",
+              }}
+            >
+              Findings rolled up into the verdict below
+            </span>
+          </div>
+
+          {/* Agent rows */}
+          <div style={{ display: "grid", gap: 2 }}>
+            {steps.map((step, i) => {
+              const isSkeptic = step.agent === "skeptic_review";
+              const label = isSkeptic
+                ? "Skeptic Review"
+                : (AGENT_LABELS[step.agent as keyof typeof AGENT_LABELS] ?? step.agent);
+              const focus = AGENT_FOCUS[step.agent] ?? "";
+
+              return (
+                <div
+                  key={step.agent}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "30px 1fr auto",
+                    gap: 12,
+                    alignItems: "start",
+                    padding: "9px 10px",
+                    borderRadius: 8,
+                    transition: "background 120ms",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.background = "var(--color-surface)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.background = "transparent";
+                  }}
+                >
+                  {/* Index */}
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "10.5px",
+                      color: "var(--color-muted)",
+                      letterSpacing: "0.04em",
+                      paddingTop: 1,
+                    }}
+                  >
+                    {String(i + 1).padStart(2, "0")}
+                  </div>
+
+                  {/* Body */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
+                      <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--color-text)" }}>
+                        {label}
+                      </span>
+                      {focus && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--color-muted)",
+                            fontStyle: "italic",
+                            fontFamily: "var(--font-serif)",
+                          }}
+                        >
+                          {focus}
+                        </span>
+                      )}
+                    </div>
+                    {step.result && (
+                      <div style={{ fontSize: "12.5px", lineHeight: 1.55, color: "var(--color-text-secondary)" }}>
+                        {step.result.slice(0, 220)}{step.result.length > 220 ? "…" : ""}
+                      </div>
+                    )}
+                    {step.error && (
+                      <div style={{ fontSize: "12.5px", lineHeight: 1.55, color: "var(--color-bear)" }}>
+                        {step.error}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status + view full */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    {step.status === "complete" && (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--color-bull)" strokeWidth="3" strokeLinecap="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                    {step.status === "error" && (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--color-bear)" strokeWidth="2.5" strokeLinecap="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    )}
+                    {(step.result || step.error) && (
+                      <button
+                        onClick={() => setDetailStep(step)}
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: "var(--color-accent)",
+                          background: "var(--color-accent-light)",
+                          border: "none",
+                          borderRadius: 5,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        Full
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-function AgentTrace({ steps }: { steps: AgentStep[] }) {
-  const [open, setOpen] = useState(false);
-  const [expandedStep, setExpandedStep] = useState<string | null>(null);
-  const completed = steps.filter((s) => s.status === "complete").length;
-  const errors = steps.filter((s) => s.status === "error").length;
+/* ── Verdict wrapper — left-accent card housing the markdown response ── */
+function VerdictBlock({
+  message,
+}: {
+  message: ChatMessage;
+}) {
+  const timestamp = new Date(message.createdAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const isAgentMode = message.mode === "agent" || message.mode === "deep_research";
 
   return (
-    <div className="mt-3 border border-[var(--color-border)] rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-sidebar-hover)] transition-colors duration-150"
+    <div
+      className="verdict-fadein"
+      style={{
+        padding: "4px 0 8px",
+      }}
+    >
+      {/* Eyebrow */}
+      <div
+        style={{
+          fontSize: 10,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "var(--color-accent)",
+          fontWeight: 700,
+          marginBottom: 12,
+        }}
       >
-        <div className="w-4 h-4 rounded bg-[var(--color-accent)] flex items-center justify-center flex-shrink-0">
-          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-          </svg>
-        </div>
-        <span className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-          {completed} agent{completed !== 1 ? "s" : ""} ran
-          {errors > 0 && <span className="text-red-400 ml-1">· {errors} error{errors !== 1 ? "s" : ""}</span>}
-        </span>
-        <svg
-          width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-          className={`ml-auto text-[var(--color-muted)] transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+        {isAgentMode ? "Verdict" : "Response"}
+      </div>
 
-      {open && (
-        <div className="px-3 py-2 flex flex-col divide-y divide-[var(--color-border)]">
-          {steps.map((step) => (
-            <AgentTraceRow
-              key={step.agent}
-              step={step}
-              expanded={expandedStep === step.agent}
-              onToggle={() => setExpandedStep((v) => v === step.agent ? null : step.agent)}
-            />
-          ))}
-        </div>
-      )}
+      {/* Response body */}
+      <Markdown>{message.content}</Markdown>
+
+      {/* Footer: timestamp + mode badge */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16 }}>
+        <span
+          style={{
+            fontSize: 11,
+            color: "var(--color-muted)",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {timestamp}
+        </span>
+        {isAgentMode && (
+          <span
+            style={{
+              background: "var(--color-accent-light)",
+              color: "var(--color-accent)",
+              padding: "2px 7px",
+              borderRadius: 99,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            {message.mode === "deep_research" ? "Deep Research" : "Agent"}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
-export default function Message({ message }: { message: ChatMessage }) {
-  const isUser = message.role === "user";
+/* ── Prompt bubble — soft-tinted navy ───────────────────────────────── */
+function PromptBubble({ message }: { message: ChatMessage }) {
+  const timestamp = new Date(message.createdAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
-  if (isUser) {
+  return (
+    <div
+      style={{
+        marginLeft: "auto",
+        maxWidth: "78%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+      }}
+    >
+      <div
+        style={{
+          background: "color-mix(in oklab, var(--color-accent) 8%, var(--color-bg))",
+          color: "var(--color-accent-hover)",
+          padding: "12px 18px",
+          borderRadius: 18,
+          borderBottomRightRadius: 6,
+          fontSize: 15,
+          lineHeight: 1.5,
+          fontWeight: 500,
+          letterSpacing: "-0.005em",
+          border: "1px solid color-mix(in oklab, var(--color-accent) 14%, transparent)",
+          boxShadow: "0 1px 2px color-mix(in oklab, var(--color-accent) 8%, transparent)",
+        }}
+      >
+        {message.content}
+      </div>
+      <div
+        style={{
+          fontSize: 11,
+          color: "var(--color-muted)",
+          marginTop: 6,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {timestamp}
+      </div>
+    </div>
+  );
+}
+
+/* ── Skeptic critique callout ───────────────────────────────────────── */
+function SkepticCritique({ critique }: { critique: string }) {
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        border: "1px solid var(--color-warn-border)",
+        background: "var(--color-warn-bg)",
+        padding: "14px 18px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+        <svg
+          width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2.5" strokeLinecap="round"
+          style={{ color: "var(--color-warn)", flexShrink: 0 }}
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: "var(--color-warn-heading)",
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+          }}
+        >
+          Second Opinion
+        </span>
+      </div>
+      <Markdown style={{ color: "var(--color-warn-text)" }}>
+        {critique}
+      </Markdown>
+    </div>
+  );
+}
+
+/* ── Simple chat avatar ─────────────────────────────────────────────── */
+function LucraAvatar() {
+  return (
+    <div
+      className="flex-shrink-0 flex items-center justify-center text-white text-[13px] font-black"
+      style={{
+        width: 30, height: 30,
+        borderRadius: 9,
+        background: "var(--color-accent)",
+        fontFamily: "var(--font-serif)",
+        letterSpacing: "0.04em",
+      }}
+    >
+      L
+    </div>
+  );
+}
+
+/* ── Main export ─────────────────────────────────────────────────────── */
+function MessageInner({
+  message,
+  onSuggestion,
+}: {
+  message: ChatMessage;
+  onSuggestion?: (text: string) => void;
+}) {
+  if (message.role === "user") {
+    return <PromptBubble message={message} />;
+  }
+
+  // Backtest mode: parse JSON result and render chart + stats
+  if (message.mode === "backtest") {
+    let backtestResult: BacktestResultType | null = null;
+    try {
+      backtestResult = JSON.parse(message.content) as BacktestResultType;
+    } catch { /* fall through to markdown */ }
+
+    if (backtestResult?.series) {
+      return <BacktestResult result={backtestResult} />;
+    }
+    // Render error message as plain text
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[78%] bg-[var(--color-user-bubble)] text-white rounded-2xl rounded-tr-sm px-4 py-3 text-[0.9rem] leading-relaxed shadow-md shadow-blue-900/15">
-          {message.content}
+      <div style={{ display: "flex", gap: 14 }}>
+        <LucraAvatar />
+        <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+          <Markdown>{message.content}</Markdown>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex gap-3.5 group">
-      <LucraIcon size={28} />
-      <div className="flex-1 min-w-0 pt-0.5">
-        <Markdown>{message.content}</Markdown>
-        {message.agentTrace && message.agentTrace.length > 0 && (
-          <AgentTrace steps={message.agentTrace} />
-        )}
-        {message.critique && (
-          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-amber-600 flex-shrink-0">
-                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide">Second Opinion</span>
-            </div>
-            <Markdown className="text-amber-900 [&_p]:text-amber-900 [&_li]:text-amber-900 [&_strong]:text-amber-800">
-              {message.critique}
-            </Markdown>
-          </div>
-        )}
-        <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <span className="text-[11px] text-[var(--color-muted)]">
+  const isAgentMode = message.mode === "agent" || message.mode === "deep_research";
+  const hasTrace = !!message.agentTrace?.length;
+
+  /* Simple chat: avatar + flat markdown, no verdict wrapper */
+  if (!isAgentMode) {
+    return (
+      <div style={{ display: "flex", gap: 14 }}>
+        <LucraAvatar />
+        <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+          <Markdown>{message.content}</Markdown>
+          <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 10, fontVariantNumeric: "tabular-nums" }}>
             {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </span>
-          {message.mode === "agent" && (
-            <span className="bg-[var(--color-accent-light)] text-[var(--color-accent)] px-1.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wide">
-              AGENT
-            </span>
+          </div>
+          {message.followups && message.followups.length > 0 && onSuggestion && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: "9.5px", letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--color-muted)", fontWeight: 600, marginBottom: 8 }}>
+                Follow up with
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {message.followups.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => onSuggestion(q)}
+                    style={{ border: "1px solid var(--color-border)", background: "var(--color-bg)", color: "var(--color-text-secondary)", padding: "7px 13px", borderRadius: 99, fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", transition: "all 140ms" }}
+                    onMouseEnter={(e) => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "var(--color-accent-medium)"; el.style.background = "var(--color-accent-light)"; el.style.color = "var(--color-accent)"; }}
+                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "var(--color-border)"; el.style.background = "var(--color-bg)"; el.style.color = "var(--color-text-secondary)"; }}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>
+    );
+  }
+
+  /* Agent / deep research: ribbon → verdict → optional critique */
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {hasTrace && <AgentRibbon steps={message.agentTrace!} />}
+      <VerdictBlock message={message} />
+      {message.critique && <SkepticCritique critique={message.critique} />}
+      {message.followups && message.followups.length > 0 && onSuggestion && (
+        <div style={{ paddingTop: 2 }}>
+          <div
+            style={{
+              fontSize: "9.5px",
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: "var(--color-muted)",
+              fontWeight: 600,
+              marginBottom: 10,
+            }}
+          >
+            Follow up with
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {message.followups.map((q) => (
+              <button
+                key={q}
+                onClick={() => onSuggestion(q)}
+                style={{
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-bg)",
+                  color: "var(--color-text-secondary)",
+                  padding: "8px 14px",
+                  borderRadius: 99,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  transition: "all 140ms",
+                }}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget as HTMLButtonElement;
+                  el.style.borderColor = "var(--color-accent-medium)";
+                  el.style.background = "var(--color-accent-light)";
+                  el.style.color = "var(--color-accent)";
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget as HTMLButtonElement;
+                  el.style.borderColor = "var(--color-border)";
+                  el.style.background = "var(--color-bg)";
+                  el.style.color = "var(--color-text-secondary)";
+                }}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function Message(props: { message: ChatMessage; onSuggestion?: (text: string) => void }) {
+  return (
+    <MessageErrorBoundary>
+      <MessageInner {...props} />
+    </MessageErrorBoundary>
   );
 }

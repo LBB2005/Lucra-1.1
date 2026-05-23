@@ -1,28 +1,23 @@
 "use client";
 import useSWR from "swr";
 import type { Holding } from "@/types/portfolio";
-
-const fetcher = (url: string) =>
-  fetch(url).then((r) => {
-    if (!r.ok) throw new Error(`${r.status}`);
-    return r.json();
-  });
+import { authFetch, authFetcher } from "@/lib/authFetch";
 
 export function usePortfolio() {
   const { data, error, isLoading, mutate } = useSWR<Holding[]>(
     "/api/portfolio",
-    fetcher,
+    authFetcher,
     { revalidateOnFocus: false }
   );
 
   const { data: settingsData, mutate: mutateSettings } = useSWR<{ cashBalance: number }>(
     "/api/portfolio/settings",
-    fetcher,
+    authFetcher,
     { revalidateOnFocus: false }
   );
 
   async function setCashBalance(cashBalance: number) {
-    await fetch("/api/portfolio/settings", {
+    await authFetch("/api/portfolio/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cashBalance }),
@@ -31,7 +26,7 @@ export function usePortfolio() {
   }
 
   async function addHolding(holding: Omit<Holding, "id" | "createdAt" | "updatedAt">) {
-    const res = await fetch("/api/portfolio", {
+    const res = await authFetch("/api/portfolio", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(holding),
@@ -41,7 +36,7 @@ export function usePortfolio() {
   }
 
   async function removeHolding(id: string) {
-    const res = await fetch(`/api/portfolio/${id}`, { method: "DELETE" });
+    const res = await authFetch(`/api/portfolio/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Failed to remove holding");
     await mutate();
   }
@@ -49,7 +44,7 @@ export function usePortfolio() {
   async function uploadCsv(file: File): Promise<{ imported: number; failed: number }> {
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch("/api/portfolio/csv", { method: "POST", body: form });
+    const res = await authFetch("/api/portfolio/csv", { method: "POST", body: form });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Upload failed");
     await mutate();

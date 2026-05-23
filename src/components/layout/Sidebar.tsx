@@ -2,6 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import useSWR from "swr";
 import { useChatStore } from "@/stores/chatStore";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useQuotes } from "@/hooks/useQuotes";
@@ -10,7 +11,109 @@ import PortfolioList from "./PortfolioList";
 import AddHoldingModal from "@/components/portfolio/AddHoldingModal";
 import CsvUploadModal from "@/components/portfolio/CsvUploadModal";
 import StatementUploadModal from "@/components/portfolio/StatementUploadModal";
+import BriefingModal from "@/components/briefing/BriefingModal";
 import type { HoldingFormData } from "@/types/portfolio";
+
+interface BriefingSummary {
+  id: string;
+  tickers: string[];
+  readAt: string | null;
+  createdAt: string;
+  content: string;
+}
+
+import { authFetch, authFetcher } from "@/lib/authFetch";
+const fetcher = authFetcher;
+
+function BriefingBanner() {
+  const { data: briefings, mutate } = useSWR<BriefingSummary[]>("/api/briefing", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
+  const [generating, setGenerating] = useState(false);
+  const [openBriefing, setOpenBriefing] = useState<BriefingSummary | null>(null);
+
+  const latest = briefings?.[0] ?? null;
+  const hasUnread = latest && !latest.readAt;
+
+  async function generate() {
+    setGenerating(true);
+    try {
+      const res = await authFetch("/api/briefing/generate", { method: "POST" });
+      if (res.ok) await mutate();
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function openLatest() {
+    if (!latest) return;
+    setOpenBriefing(latest);
+    if (!latest.readAt) {
+      await authFetch("/api/briefing", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: latest.id }) });
+      await mutate();
+    }
+  }
+
+  return (
+    <>
+      <div
+        className="mx-[14px] mb-2 flex-shrink-0"
+        style={{
+          border: `1px solid ${hasUnread ? "var(--color-accent-medium)" : "var(--color-border)"}`,
+          background: hasUnread ? "var(--color-accent-light)" : "var(--color-surface)",
+          borderRadius: 8,
+          overflow: "hidden",
+        }}
+      >
+        <div className="flex items-center gap-2 px-3 py-2">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"
+            style={{ color: hasUnread ? "var(--color-accent)" : "var(--color-muted)", flexShrink: 0 }}>
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+            <polyline points="22,6 12,13 2,6" />
+          </svg>
+          <span
+            className="flex-1 text-[11px] font-semibold truncate"
+            style={{ color: hasUnread ? "var(--color-accent)" : "var(--color-text-secondary)" }}
+          >
+            {hasUnread ? "New briefing ready" : latest ? "Weekly Briefing" : "No briefing yet"}
+          </span>
+          {hasUnread && (
+            <span className="w-[6px] h-[6px] rounded-full flex-shrink-0" style={{ background: "var(--color-accent)" }} />
+          )}
+        </div>
+        <div className="flex border-t border-[var(--color-border)]">
+          {latest && (
+            <button
+              onClick={openLatest}
+              className="flex-1 text-[10.5px] font-medium py-1.5 transition-colors duration-100"
+              style={{ color: "var(--color-accent)", background: "transparent" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-accent-light)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+            >
+              Read
+            </button>
+          )}
+          {latest && <div style={{ width: 1, background: "var(--color-border)" }} />}
+          <button
+            onClick={generate}
+            disabled={generating}
+            className="flex-1 text-[10.5px] font-medium py-1.5 transition-colors duration-100 disabled:opacity-50"
+            style={{ color: "var(--color-text-secondary)", background: "transparent" }}
+            onMouseEnter={(e) => { if (!generating) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-2)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+          >
+            {generating ? "Generating…" : "Generate"}
+          </button>
+        </div>
+      </div>
+
+      {openBriefing && (
+        <BriefingModal briefing={openBriefing} onClose={() => setOpenBriefing(null)} />
+      )}
+    </>
+  );
+}
 
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 500;
@@ -21,8 +124,8 @@ function fmt(n: number, d = 0) {
 }
 
 /** Allocation bar using the same oklch colour ramp as the design */
-function allocColor(i: number, total: number) {
-  const l = 0.55 - i * 0.04;
+function allocColor(i: number) {
+  const l = Math.max(0.2, 0.55 - i * 0.04);
   const c = 0.13;
   const h = 250 - i * 12;
   return `oklch(${l} ${c} ${h})`;
@@ -90,7 +193,7 @@ function PortfolioHero() {
           {weights.map((w, i) => (
             <div
               key={holdings[i]?.ticker ?? i}
-              style={{ width: `${w}%`, background: allocColor(i, weights.length) }}
+              style={{ width: `${w}%`, background: allocColor(i) }}
               title={`${holdings[i]?.ticker} ${w.toFixed(1)}%`}
             />
           ))}
@@ -111,7 +214,10 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   const reset = useChatStore((s) => s.reset);
-  const { addHolding, uploadCsv } = usePortfolio();
+  const streamingConversationId = useChatStore((s) => s.streamingConversationId);
+  const conversationId = useChatStore((s) => s.conversationId);
+  const hasBackgroundStream = !!streamingConversationId && streamingConversationId !== conversationId;
+  const { addHolding, uploadCsv, setCashBalance } = usePortfolio();
 
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -160,6 +266,7 @@ export default function Sidebar() {
   }, [handleMouseMove, handleMouseUp]);
 
   const isOnPortfolio = pathname === "/portfolio";
+  const isOnHedgeFund = pathname === "/hedge-fund";
 
   return (
     <aside
@@ -189,30 +296,41 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Nav pill */}
+      {/* Nav pill — Chat + Portfolio */}
       <div
-        className="flex gap-1 mx-[14px] mb-3 p-[3px] rounded-[10px] flex-shrink-0"
-        style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
+        className="flex gap-1 mx-[14px] mb-[6px] p-[3px] flex-shrink-0"
+        style={{
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
+          borderRadius: isOnHedgeFund ? "4px" : "10px",
+        }}
       >
         <Link
           href="/chat"
-          className="flex-1 text-center text-[12px] font-medium py-[6px] rounded-[7px] transition-all duration-150"
+          className="flex-1 text-center text-[12px] font-medium py-[5px] transition-all duration-150 relative"
           style={
-            !isOnPortfolio
+            !isOnPortfolio && !isOnHedgeFund
               ? {
                   background: "var(--color-bg)",
                   color: "var(--color-accent)",
                   boxShadow: "0 1px 2px rgba(15,23,42,0.06)",
                   fontWeight: 600,
+                  borderRadius: isOnHedgeFund ? "2px" : "7px",
                 }
-              : { color: "var(--color-text-secondary)" }
+              : { color: "var(--color-text-secondary)", borderRadius: isOnHedgeFund ? "2px" : "7px" }
           }
         >
           Chat
+          {hasBackgroundStream && (
+            <span
+              className="absolute top-[4px] right-[10px] inline-flex w-[7px] h-[7px] rounded-full"
+              style={{ background: "var(--color-accent)", boxShadow: "0 0 0 2px color-mix(in oklab, var(--color-accent) 25%, transparent)", animation: "pulse-dot 1.4s infinite ease-in-out" }}
+            />
+          )}
         </Link>
         <Link
           href="/portfolio"
-          className="flex-1 text-center text-[12px] font-medium py-[6px] rounded-[7px] transition-all duration-150"
+          className="flex-1 text-center text-[12px] font-medium py-[5px] transition-all duration-150"
           style={
             isOnPortfolio
               ? {
@@ -220,13 +338,45 @@ export default function Sidebar() {
                   color: "var(--color-accent)",
                   boxShadow: "0 1px 2px rgba(15,23,42,0.06)",
                   fontWeight: 600,
+                  borderRadius: isOnHedgeFund ? "2px" : "7px",
                 }
-              : { color: "var(--color-text-secondary)" }
+              : { color: "var(--color-text-secondary)", borderRadius: isOnHedgeFund ? "2px" : "7px" }
           }
         >
           Portfolio
         </Link>
       </div>
+
+      {/* Hedge Fund nav button */}
+      <Link
+        href="/hedge-fund"
+        className="flex items-center gap-[6px] mx-[14px] mb-3 px-[10px] py-[6px] text-[12px] font-medium transition-all duration-150 flex-shrink-0"
+        style={
+          isOnHedgeFund
+            ? {
+                background: "var(--color-accent)",
+                color: "#fff",
+                border: "1px solid var(--color-accent)",
+                borderRadius: "4px",
+                fontWeight: 600,
+              }
+            : {
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border)",
+                background: "var(--color-surface)",
+                borderRadius: "7px",
+              }
+        }
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+          <polyline points="16 7 22 7 22 13" />
+        </svg>
+        Hedge Fund
+      </Link>
+
+      {/* Weekly briefing banner */}
+      <BriefingBanner />
 
       {/* Portfolio hero */}
       <PortfolioHero />
@@ -324,9 +474,15 @@ export default function Sidebar() {
       {showStatement && (
         <StatementUploadModal
           onClose={() => setShowStatement(false)}
-          onAdd={async (holdings) => {
+          onAdd={async (holdings, buyingPower, replace) => {
+            if (replace) {
+              await authFetch("/api/portfolio", { method: "DELETE" });
+            }
             for (const h of holdings) {
               await addHolding({ ticker: h.ticker, companyName: h.companyName ?? null, shares: h.shares, avgCost: h.avgCost ?? 0, sector: null });
+            }
+            if (buyingPower != null && buyingPower > 0) {
+              await setCashBalance(buyingPower);
             }
           }}
         />

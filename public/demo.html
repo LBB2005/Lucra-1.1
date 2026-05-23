@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1280, initial-scale=1" />
+<title>Lucra — Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #fafaf9;
+  --surface: #f5f5f0;
+  --border: #e8e8e2;
+  --border-strong: #d0d0c8;
+  --text: #1a1a18;
+  --text-secondary: #6b6b60;
+  --muted: #9d9d90;
+  --accent: #2d5016;
+  --accent-light: #eef3e8;
+  --accent-hover: #3a6620;
+  --bull: #057a55;
+  --bear: #b42318;
+  --warn: #b45309;
+  --serif: 'Playfair Display', Georgia, serif;
+  --sans: 'Geist', -apple-system, sans-serif;
+  --shadow: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-md: 0 4px 16px rgba(15,23,42,0.08);
+  --radius: 10px;
+  --radius-lg: 14px;
+}
+body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
+
+/* NAV TABS */
+.screen-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(250,250,249,0.95); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 4px; padding: 10px 16px;
+}
+.screen-nav span { font-size: 11px; font-weight: 600; color: var(--muted); margin-right: 8px; letter-spacing: 0.06em; text-transform: uppercase; }
+.screen-nav button {
+  padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); font-family: var(--sans); font-size: 12px; cursor: pointer; color: var(--text-secondary);
+  transition: all 0.15s;
+}
+.screen-nav button.active { background: var(--accent); color: white; border-color: var(--accent); font-weight: 500; }
+
+/* SCREEN WRAPPER */
+.screen { display: none; width: 1280px; min-height: 820px; }
+.screen.active { display: flex; }
+
+/* ── LAYOUT SHELL ── */
+.shell { display: flex; width: 1280px; height: 820px; overflow: hidden; border: 1px solid var(--border); }
+
+/* SIDEBAR */
+.sidebar {
+  width: 248px; flex-shrink: 0; background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+}
+.sidebar-top {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.logo { font-family: var(--serif); font-weight: 700; font-size: 17px; letter-spacing: 0.08em; color: var(--accent); }
+.icon-btn {
+  width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.icon-btn svg { width: 12px; height: 12px; stroke: var(--text-secondary); fill: none; stroke-width: 2; stroke-linecap: round; }
+
+.sidebar-nav { display: flex; gap: 2px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.nav-pill {
+  flex: 1; text-align: center; padding: 6px 10px; border-radius: 7px; font-size: 12px;
+  font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+}
+.nav-pill.active {
+  background: var(--bg); color: var(--accent); font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.08);
+}
+
+.sidebar-section-hdr {
+  padding: 10px 16px 6px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+/* PORTFOLIO HERO */
+.portfolio-hero {
+  margin: 0 12px 10px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 14px 14px 12px;
+}
+.hero-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.hero-value { font-family: var(--serif); font-size: 26px; font-weight: 600; color: var(--text); line-height: 1.1; }
+.hero-delta { display: inline-flex; align-items: center; gap: 3px; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--bull); }
+.alloc-bar { margin-top: 10px; height: 6px; border-radius: 3px; display: flex; overflow: hidden; gap: 1px; }
+.alloc-seg { height: 100%; border-radius: 2px; }
+
+.holding-row {
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: center; gap: 8px; padding: 7px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.03); cursor: pointer;
+  transition: background 0.1s;
+}
+.holding-row:hover { background: rgba(0,0,0,0.02); }
+.ticker-chip {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em; padding: 2px 6px;
+  border-radius: 4px; background: var(--accent-light); color: var(--accent);
+}
+.holding-name { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.holding-pnl { font-size: 11.5px; font-weight: 600; }
+.bull { color: var(--bull); }
+.bear { color: var(--bear); }
+
+.sidebar-recents { padding: 8px 16px; }
+.recent-hdr { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.recent-item { font-size: 11.5px; color: var(--text-secondary); padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.04); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* MAIN AREA */
+.main { flex: 1; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+
+/* CHAT HEADER */
+.chat-header {
+  flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg);
+}
+.header-left { display: flex; align-items: baseline; gap: 12px; }
+.header-eyebrow { font-family: var(--serif); font-style: italic; font-size: 11.5px; color: var(--muted); }
+.header-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.mode-toggle {
+  display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.mode-btn {
+  display: flex; align-items: center; gap: 5px; padding: 5px 12px;
+  font-size: 12px; font-weight: 500; border-radius: 6px; cursor: pointer;
+  color: var(--text-secondary); background: transparent;
+  transition: all 0.15s; border: none; font-family: var(--sans);
+}
+.mode-btn.active {
+  background: var(--bg); color: var(--accent); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.06);
+}
+.mode-badge {
+  font-size: 10px; padding: 1px 5px; border-radius: 99px; font-weight: 700;
+  background: var(--accent-light); color: var(--accent);
+}
+
+/* CHAT BODY */
+.chat-body { flex: 1; overflow-y: auto; padding: 32px 0 8px; }
+
+/* EMPTY STATE */
+.empty-state { max-width: 720px; margin: 0 auto; padding: 0 24px; }
+.greeting { font-family: var(--serif); font-size: 26px; font-weight: 600; color: var(--text); margin-bottom: 20px; }
+
+/* MARKET PULSE */
+.pulse-strip {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+.pulse-hdr {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted);
+}
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bull); flex-shrink: 0; }
+.pulse-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0; }
+.pulse-item { padding: 0 12px; border-right: 1px solid var(--border); }
+.pulse-item:first-child { padding-left: 0; }
+.pulse-item:last-child { border-right: none; }
+.pulse-ticker { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; color: var(--muted); text-transform: uppercase; }
+.pulse-label { font-size: 10.5px; color: var(--text-secondary); margin-bottom: 2px; }
+.pulse-val { font-size: 14px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.pulse-chg { font-size: 11px; font-weight: 600; }
+
+/* SUGGESTION TILES */
+.suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.suggestion {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 13px 14px; cursor: pointer; transition: all 0.15s; box-shadow: var(--shadow);
+}
+.suggestion:hover { border-color: var(--accent); box-shadow: var(--shadow-md); }
+.sug-tag { font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 5px; }
+.sug-text { font-size: 12.5px; color: var(--text); line-height: 1.4; }
+
+/* CHAT INPUT */
+.chat-input-wrap {
+  flex-shrink: 0; padding: 12px 24px 16px;
+  background: linear-gradient(to bottom, rgba(250,250,249,0) 0%, var(--bg) 28%);
+}
+.chat-input-inner { max-width: 720px; margin: 0 auto; }
+.input-box {
+  display: flex; align-items: flex-end; border: 1px solid var(--border);
+  border-radius: 14px; background: var(--bg); padding: 10px 48px 10px 16px;
+  box-shadow: var(--shadow); position: relative;
+  font-size: 13px; color: var(--text-secondary); min-height: 44px;
+}
+.input-send {
+  position: absolute; right: 8px; bottom: 7px;
+  width: 30px; height: 30px; border-radius: 50%; background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.input-send svg { width: 12px; height: 12px; stroke: white; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.disclaimer { text-align: center; font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: 0.04em; }
+
+/* ── SCREEN 2: AGENT MODE RUNNING ── */
+.message-wrap { max-width: 720px; margin: 0 auto; padding: 0 24px 24px; }
+.user-msg {
+  display: flex; justify-content: flex-end; margin-bottom: 20px;
+}
+.user-bubble {
+  background: var(--accent); color: white; padding: 10px 14px;
+  border-radius: 14px 14px 4px 14px; font-size: 13px; max-width: 480px; line-height: 1.5;
+}
+
+.activity-panel {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-md);
+}
+.activity-hdr {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.crew-label { display: flex; align-items: center; gap: 7px; }
+.crew-icon { width: 20px; height: 20px; border-radius: 5px; background: var(--accent); display: flex; align-items: center; justify-content: center; }
+.crew-icon svg { width: 10px; height: 10px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; }
+.crew-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.crew-sub { font-size: 11px; color: var(--muted); }
+.progress-wrap { display: flex; align-items: center; gap: 8px; }
+.progress-bar { width: 100px; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.3s; }
+.progress-label { font-size: 11px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+.agent-rows { padding: 4px 0; }
+.agent-row {
+  display: grid; grid-template-columns: 20px 1fr auto;
+  align-items: center; gap: 10px; padding: 7px 16px;
+}
+.agent-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-complete { background: var(--bull); }
+.dot-running { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.dot-pending { background: var(--border-strong); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.agent-name { font-size: 12px; font-weight: 500; color: var(--text); }
+.agent-focus { font-size: 11px; color: var(--muted); }
+.agent-badge {
+  font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 99px;
+}
+.badge-complete { background: #ecfdf5; color: var(--bull); }
+.badge-running { background: var(--accent-light); color: var(--accent); }
+.badge-pending { background: var(--surface); color: var(--muted); }
+
+.activity-footer {
+  padding: 10px 16px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 7px;
+  background: var(--surface); font-size: 11.5px; color: var(--muted);
+}
+.footer-spin {
+  width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border-strong);
+  border-top-color: var(--accent); animation: spin 0.8s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── SCREEN 3: FINAL RESPONSE ── */
+.assistant-msg { display: flex; gap: 10px; margin-bottom: 20px; }
+.lucra-avatar {
+  width: 28px; height: 28px; border-radius: 7px; background: var(--accent); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--serif); font-size: 14px; font-weight: 700; color: white; margin-top: 2px;
+}
+.response-body { flex: 1; }
+.response-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px 14px 14px 14px; padding: 18px 20px;
+  font-size: 13px; line-height: 1.65; color: var(--text);
+  box-shadow: var(--shadow);
+}
+.response-card h3 { font-size: 13.5px; font-weight: 700; color: var(--text); margin: 14px 0 6px; }
+.response-card h3:first-child { margin-top: 0; }
+.response-card p { margin-bottom: 10px; }
+.response-card ul { margin: 6px 0 10px 18px; }
+.response-card li { margin-bottom: 4px; }
+.response-card strong { font-weight: 600; color: var(--text); }
+
+/* CHART */
+.chart-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px 18px; margin: 14px 0;
+  box-shadow: var(--shadow);
+}
+.chart-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+.bar-chart { display: flex; flex-direction: column; gap: 8px; }
+.bar-row { display: grid; grid-template-columns: 90px 1fr 50px; align-items: center; gap: 10px; }
+.bar-label { font-size: 11.5px; color: var(--text-secondary); text-align: right; font-weight: 500; }
+.bar-track { height: 10px; background: var(--surface); border-radius: 5px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 5px; }
+.bar-value { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bar-bull { background: var(--bull); }
+.bar-bear { background: var(--bear); }
+
+/* SKEPTIC REVIEW */
+.skeptic-chip {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 10px;
+  padding: 4px 10px 4px 6px; border-radius: 99px; border: 1px solid #fde68a;
+  background: #fffbeb; font-size: 11.5px; color: #92400e; cursor: pointer;
+}
+.skeptic-content {
+  background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: var(--radius); padding: 12px 14px; margin-top: 8px;
+  font-size: 12px; color: #78350f; line-height: 1.6;
+}
+
+/* ── SCREEN 4: PORTFOLIO ── */
+.page-body { flex: 1; overflow-y: auto; padding: 24px; }
+.page-header { margin-bottom: 20px; }
+.page-title { font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 2px; }
+.page-sub { font-size: 12px; color: var(--muted); }
+
+.kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpi-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 14px 16px; box-shadow: var(--shadow);
+}
+.kpi-label { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.kpi-value { font-family: var(--serif); font-size: 22px; font-weight: 600; color: var(--text); }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.kpi-delta { font-size: 12px; font-weight: 600; margin-top: 2px; }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: var(--shadow);
+}
+.card-title { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 14px; }
+
+.donut-wrap { display: flex; align-items: center; gap: 20px; }
+.donut { position: relative; width: 110px; height: 110px; flex-shrink: 0; }
+.donut svg { width: 100%; height: 100%; }
+.donut-legend { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.legend-item { display: flex; align-items: center; gap: 7px; }
+.legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.legend-name { font-size: 11.5px; color: var(--text-secondary); flex: 1; }
+.legend-pct { font-size: 11.5px; font-weight: 600; color: var(--text); }
+
+.divergent-chart { display: flex; flex-direction: column; gap: 10px; }
+.div-row { display: grid; grid-template-columns: 60px 1fr 16px 1fr 52px; align-items: center; gap: 6px; }
+.div-label { font-size: 11px; font-weight: 600; color: var(--text); text-align: right; }
+.div-neg { display: flex; justify-content: flex-end; }
+.div-bar { height: 12px; border-radius: 3px; }
+.div-center { width: 1px; background: var(--border-strong); height: 24px; margin: auto; }
+.div-pos { display: flex; justify-content: flex-start; }
+.div-value { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.div-value.bull { color: var(--bull); }
+.div-value.bear { color: var(--bear); }
+
+.holdings-table { width: 100%; border-collapse: collapse; }
+.holdings-table th {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--border);
+}
+.holdings-table td { padding: 10px 12px; border-bottom: 1px solid rgba(0,0,0,0.04); font-size: 12.5px; }
+.holdings-table tr:hover td { background: var(--surface); cursor: pointer; }
+
+/* ── SCREEN 5: FULL AGENT REPORT ── */
+.report-scroll { padding: 24px; max-width: 800px; margin: 0 auto; }
+.report-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.report-title { font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+.report-meta { font-size: 12px; color: var(--muted); }
+.report-section { margin-bottom: 20px; }
+.report-section h3 { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.metric-box {
+  background: var(--surface); border-radius: var(--radius);
+  padding: 10px 12px; border: 1px solid var(--border);
+}
+.metric-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.metric-value { font-size: 16px; font-weight: 600; font-family: var(--serif); }
+.metric-note { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+.verdict {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 99px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.03em;
+  background: #ecfdf5; color: var(--bull); border: 1px solid #a7f3d0;
+  margin-bottom: 12px;
+}
+</style>
+</head>
+<body>
+
+<div class="screen-nav">
+  <span>Lucra Demo</span>
+  <button class="active" onclick="show(1)">1 · Chat Home</button>
+  <button onclick="show(2)">2 · Agent Running</button>
+  <button onclick="show(3)">3 · AI Response</button>
+  <button onclick="show(4)">4 · Portfolio</button>
+  <button onclick="show(5)">5 · Full Report</button>
+</div>
+
+<div style="padding-top: 44px;">
+
+<!-- ══ SCREEN 1: CHAT HOME ══ -->
+<div class="screen active" id="s1">
+<div class="shell">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <span class="logo">LUCRA</span>
+      <div class="icon-btn"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-pill active">Chat</div>
+      <div class="nav-pill">Portfolio</div>
+    </div>
+
+    <!-- Portfolio hero -->
+    <div style="padding: 10px 12px 4px;">
+      <div class="section-label" style="padding: 0 4px 6px;">PORTFOLIO</div>
+      <div class="portfolio-hero">
+        <div class="hero-eyebrow">Total Value</div>
+        <div class="hero-value">$84,320</div>
+        <div class="hero-delta">▲ +$12,480 · +17.4%</div>
+        <div class="alloc-bar">
+          <div class="alloc-seg" style="width:30%;background:oklch(0.55 0.13 250)"></div>
+          <div class="alloc-seg" style="width:22%;background:oklch(0.51 0.13 238)"></div>
+          <div class="alloc-seg" style="width:18%;background:oklch(0.47 0.13 226)"></div>
+          <div class="alloc-seg" style="width:15%;background:oklch(0.43 0.13 214)"></div>
+          <div class="alloc-seg" style="width:15%;background:oklch(0.39 0.13 202)"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section-hdr">
+      <span class="section-label">HOLDINGS</span>
+    </div>
+    <div>
+      <div class="holding-row">
+        <span class="ticker-chip">NVDA</span>
+        <span class="holding-name">Nvidia</span>
+        <span class="holding-pnl bull">+89.2%</span>
+      </div>
+      <div class="holding-row">
+        <span class="ticker-chip">AAPL</span>
+        <span class="holding-name">Apple</span>
+        <span class="holding-pnl bull">+24.1%</span>
+      </div>
+      <div class="holding-row">
+        <span class="ticker-chip">MSFT</span>
+        <span class="holding-name">Microsoft</span>
+        <span class="holding-pnl bull">+18.7%</span>
+      </div>
+      <div class="holding-row">
+        <span class="ticker-chip">TSLA</span>
+        <span class="holding-name">Tesla</span>
+        <span class="holding-pnl bear">−14.3%</span>
+      </div>
+      <div class="holding-row">
+        <span class="ticker-chip">AMD</span>
+        <span class="holding-name">AMD</span>
+        <span class="holding-pnl bull">+6.8%</span>
+      </div>
+    </div>
+
+    <div class="sidebar-recents" style="margin-top: auto; padding-top: 12px;">
+      <div class="recent-hdr">RECENT</div>
+      <div class="recent-item">Analyze NVDA — should I take profits?</div>
+      <div class="recent-item">What's driving Apple's growth in 2025?</div>
+      <div class="recent-item">Full portfolio risk review</div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="chat-header">
+      <div class="header-left">
+        <span class="header-eyebrow">Monday, May 19th</span>
+        <h1 class="header-title">Research</h1>
+      </div>
+      <div class="mode-toggle">
+        <button class="mode-btn active">Chat</button>
+        <button class="mode-btn">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Agent Mode
+          <span class="mode-badge">15</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="chat-body">
+      <div class="empty-state">
+        <div class="greeting">Good morning, Liam</div>
+
+        <!-- Market Pulse -->
+        <div class="pulse-strip">
+          <div class="pulse-hdr">
+            <div class="live-dot"></div>
+            Market Pulse
+          </div>
+          <div class="pulse-grid">
+            <div class="pulse-item">
+              <div class="pulse-label">S&amp;P 500</div>
+              <div class="pulse-val">$591.42</div>
+              <div class="pulse-chg bull">▲ +0.82%</div>
+            </div>
+            <div class="pulse-item">
+              <div class="pulse-label">Nasdaq</div>
+              <div class="pulse-val">$478.95</div>
+              <div class="pulse-chg bull">▲ +1.14%</div>
+            </div>
+            <div class="pulse-item">
+              <div class="pulse-label">Dow</div>
+              <div class="pulse-val">$420.18</div>
+              <div class="pulse-chg bull">▲ +0.31%</div>
+            </div>
+            <div class="pulse-item">
+              <div class="pulse-label">10Y Bond</div>
+              <div class="pulse-val">$88.24</div>
+              <div class="pulse-chg bear">▼ −0.45%</div>
+            </div>
+            <div class="pulse-item">
+              <div class="pulse-label">Gold</div>
+              <div class="pulse-val">$214.63</div>
+              <div class="pulse-chg bull">▲ +0.27%</div>
+            </div>
+            <div class="pulse-item">
+              <div class="pulse-label">Oil</div>
+              <div class="pulse-val">$63.92</div>
+              <div class="pulse-chg bear">▼ −1.23%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Suggestion tiles -->
+        <div class="suggestions">
+          <div class="suggestion">
+            <div class="sug-tag">Portfolio Risk</div>
+            <div class="sug-text">Review my portfolio — how concentrated am I in AI/tech?</div>
+          </div>
+          <div class="suggestion">
+            <div class="sug-tag">Deep Dive</div>
+            <div class="sug-text">Give me a full analysis of NVDA — is it still a buy here?</div>
+          </div>
+          <div class="suggestion">
+            <div class="sug-tag">Earnings Watch</div>
+            <div class="sug-text">What earnings catalysts should I watch this week?</div>
+          </div>
+          <div class="suggestion">
+            <div class="sug-tag">Macro View</div>
+            <div class="sug-text">How is the Fed rate outlook affecting growth stocks?</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-wrap">
+      <div class="chat-input-inner">
+        <div class="input-box" style="position:relative;">
+          Ask about a stock, sector, or your portfolio…
+          <div class="input-send">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+          </div>
+        </div>
+        <div class="disclaimer">Not financial advice · Always do your own research</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ SCREEN 2: AGENT MODE RUNNING ══ -->
+<div class="screen" id="s2">
+<div class="shell">
+  <div class="sidebar">
+    <div class="sidebar-top"><span class="logo">LUCRA</span></div>
+    <div class="sidebar-nav">
+      <div class="nav-pill active">Chat</div>
+      <div class="nav-pill">Portfolio</div>
+    </div>
+    <div style="padding: 10px 12px 4px;">
+      <div class="section-label" style="padding: 0 4px 6px;">PORTFOLIO</div>
+      <div class="portfolio-hero">
+        <div class="hero-eyebrow">Total Value</div>
+        <div class="hero-value">$84,320</div>
+        <div class="hero-delta">▲ +$12,480 · +17.4%</div>
+        <div class="alloc-bar">
+          <div class="alloc-seg" style="width:30%;background:oklch(0.55 0.13 250)"></div>
+          <div class="alloc-seg" style="width:22%;background:oklch(0.51 0.13 238)"></div>
+          <div class="alloc-seg" style="width:18%;background:oklch(0.47 0.13 226)"></div>
+          <div class="alloc-seg" style="width:15%;background:oklch(0.43 0.13 214)"></div>
+          <div class="alloc-seg" style="width:15%;background:oklch(0.39 0.13 202)"></div>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-section-hdr"><span class="section-label">HOLDINGS</span></div>
+    <div>
+      <div class="holding-row"><span class="ticker-chip">NVDA</span><span class="holding-name">Nvidia</span><span class="holding-pnl bull">+89.2%</span></div>
+      <div class="holding-row"><span class="ticker-chip">AAPL</span><span class="holding-name">Apple</span><span class="holding-pnl bull">+24.1%</span></div>
+      <div class="holding-row"><span class="ticker-chip">MSFT</span><span class="holding-name">Microsoft</span><span class="holding-pnl bull">+18.7%</span></div>
+      <div class="holding-row"><span class="ticker-chip">TSLA</span><span class="holding-name">Tesla</span><span class="holding-pnl bear">−14.3%</span></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="chat-header">
+      <div class="header-left">
+        <span class="header-eyebrow">Monday, May 19th</span>
+        <h1 class="header-title">Research</h1>
+      </div>
+      <div class="mode-toggle">
+        <button class="mode-btn">Chat</button>
+        <button class="mode-btn active">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Agent Mode
+          <span class="mode-badge">15</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="chat-body">
+      <div class="message-wrap">
+        <div class="user-msg">
+          <div class="user-bubble">Give me a full analysis of NVDA — deep dive on valuation, technicals, insider activity, and whether I should add to my position.</div>
+        </div>
+
+        <!-- Activity Panel -->
+        <div class="activity-panel">
+          <div class="activity-hdr">
+            <div class="crew-label">
+              <div class="crew-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <div>
+                <div class="crew-title">Research crew</div>
+                <div class="crew-sub">15 specialized agents · deep analysis mode</div>
+              </div>
+            </div>
+            <div class="progress-wrap">
+              <div class="progress-bar"><div class="progress-fill" style="width:47%"></div></div>
+              <span class="progress-label">7 / 15</span>
+            </div>
+          </div>
+
+          <div class="agent-rows">
+            <div class="agent-row">
+              <div class="agent-dot dot-complete"></div>
+              <div><div class="agent-name">Technical Analysis</div><div class="agent-focus">RSI, MACD, moving averages, momentum signals</div></div>
+              <span class="agent-badge badge-complete">✓ Done</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-complete"></div>
+              <div><div class="agent-name">News Research</div><div class="agent-focus">Recent headlines, sentiment, material events</div></div>
+              <span class="agent-badge badge-complete">✓ Done</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-complete"></div>
+              <div><div class="agent-name">Analyst Consensus</div><div class="agent-focus">Wall Street price targets and ratings</div></div>
+              <span class="agent-badge badge-complete">✓ Done</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-complete"></div>
+              <div><div class="agent-name">Earnings &amp; Catalysts</div><div class="agent-focus">EPS trends, beats/misses, upcoming reports</div></div>
+              <span class="agent-badge badge-complete">✓ Done</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-complete"></div>
+              <div><div class="agent-name">Social Sentiment</div><div class="agent-focus">StockTwits, Reddit WallStreetBets sentiment</div></div>
+              <span class="agent-badge badge-complete">✓ Done</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-complete"></div>
+              <div><div class="agent-name">Options Flow</div><div class="agent-focus">Put/call ratio, unusual activity, dark pools</div></div>
+              <span class="agent-badge badge-complete">✓ Done</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-complete"></div>
+              <div><div class="agent-name">🔥 Hype Score</div><div class="agent-focus">Real-time narrative across Reddit, X, YouTube</div></div>
+              <span class="agent-badge badge-complete">✓ Done</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-running"></div>
+              <div><div class="agent-name">DCF Valuation</div><div class="agent-focus">Discounted cash flow · fair value estimate</div></div>
+              <span class="agent-badge badge-running">Running…</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-running"></div>
+              <div><div class="agent-name">Insider &amp; Institutional</div><div class="agent-focus">SEC Form 4, 13F institutional changes</div></div>
+              <span class="agent-badge badge-running">Running…</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-pending"></div>
+              <div><div class="agent-name">Comparables</div><div class="agent-focus">P/E, EV/EBITDA vs AMD, INTC, QCOM peers</div></div>
+              <span class="agent-badge badge-pending">Pending</span>
+            </div>
+            <div class="agent-row">
+              <div class="agent-dot dot-pending"></div>
+              <div><div class="agent-name">Multi-Year Fundamentals</div><div class="agent-focus">3–5yr revenue, margins, FCF from SEC EDGAR</div></div>
+              <span class="agent-badge badge-pending">Pending</span>
+            </div>
+          </div>
+
+          <div class="activity-footer">
+            <div class="footer-spin"></div>
+            Synthesizing findings across all agents…
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-wrap">
+      <div class="chat-input-inner">
+        <div class="input-box" style="position:relative; opacity:0.6;">
+          Ask a research question — 15 agents will analyze it…
+          <div class="input-send" style="background:var(--muted);">
+            <div style="width:12px;height:12px;border-radius:50%;border:2px solid white;border-top-color:transparent;animation:spin 0.9s linear infinite;"></div>
+          </div>
+        </div>
+        <div class="disclaimer">Not financial advice · Always do your own research</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ SCREEN 3: FINAL RESPONSE ══ -->
+<div class="screen" id="s3">
+<div class="shell">
+  <div class="sidebar">
+    <div class="sidebar-top"><span class="logo">LUCRA</span></div>
+    <div class="sidebar-nav">
+      <div class="nav-pill active">Chat</div>
+      <div class="nav-pill">Portfolio</div>
+    </div>
+    <div style="padding: 10px 12px 4px;">
+      <div class="portfolio-hero">
+        <div class="hero-eyebrow">Total Value</div>
+        <div class="hero-value">$84,320</div>
+        <div class="hero-delta">▲ +$12,480 · +17.4%</div>
+        <div class="alloc-bar">
+          <div class="alloc-seg" style="width:30%;background:oklch(0.55 0.13 250)"></div>
+          <div class="alloc-seg" style="width:22%;background:oklch(0.51 0.13 238)"></div>
+          <div class="alloc-seg" style="width:18%;background:oklch(0.47 0.13 226)"></div>
+          <div class="alloc-seg" style="width:15%;background:oklch(0.43 0.13 214)"></div>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-section-hdr"><span class="section-label">HOLDINGS</span></div>
+    <div>
+      <div class="holding-row"><span class="ticker-chip">NVDA</span><span class="holding-name">Nvidia</span><span class="holding-pnl bull">+89.2%</span></div>
+      <div class="holding-row"><span class="ticker-chip">AAPL</span><span class="holding-name">Apple</span><span class="holding-pnl bull">+24.1%</span></div>
+      <div class="holding-row"><span class="ticker-chip">MSFT</span><span class="holding-name">Microsoft</span><span class="holding-pnl bull">+18.7%</span></div>
+      <div class="holding-row"><span class="ticker-chip">TSLA</span><span class="holding-name">Tesla</span><span class="holding-pnl bear">−14.3%</span></div>
+    </div>
+    <div class="sidebar-recents" style="margin-top: 12px;">
+      <div class="recent-hdr">RECENT</div>
+      <div class="recent-item" style="font-weight:600; color: var(--accent);">NVDA full analysis — add to position?</div>
+      <div class="recent-item">What's driving Apple's growth in 2025?</div>
+      <div class="recent-item">Full portfolio risk review</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="chat-header">
+      <div class="header-left">
+        <span class="header-eyebrow">Monday, May 19th</span>
+        <h1 class="header-title">Research</h1>
+      </div>
+      <div class="mode-toggle">
+        <button class="mode-btn">Chat</button>
+        <button class="mode-btn active">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Agent Mode <span class="mode-badge">15</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="chat-body">
+      <div class="message-wrap">
+        <div class="user-msg">
+          <div class="user-bubble">Give me a full analysis of NVDA — deep dive on valuation, technicals, insider activity, and whether I should add to my position.</div>
+        </div>
+
+        <div class="assistant-msg">
+          <div class="lucra-avatar">L</div>
+          <div class="response-body">
+            <div class="response-card">
+              <h3>NVDA — Nvidia Corporation · Full Research Report</h3>
+              <div class="verdict">▲ BUY — High Conviction · 12 of 15 agents bullish</div>
+
+              <div class="chart-card">
+                <div class="chart-title">NVDA vs Peer Valuation (Forward P/E)</div>
+                <div class="chart-sub">As of May 2026 — consensus estimates</div>
+                <div class="bar-chart">
+                  <div class="bar-row">
+                    <div class="bar-label">NVDA</div>
+                    <div class="bar-track"><div class="bar-fill bar-bull" style="width:82%"></div></div>
+                    <div class="bar-value bull">42.1x</div>
+                  </div>
+                  <div class="bar-row">
+                    <div class="bar-label">AMD</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:46%;background:#6b7280"></div></div>
+                    <div class="bar-value" style="color:var(--text-secondary)">23.8x</div>
+                  </div>
+                  <div class="bar-row">
+                    <div class="bar-label">INTC</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:28%;background:#6b7280"></div></div>
+                    <div class="bar-value" style="color:var(--text-secondary)">14.4x</div>
+                  </div>
+                  <div class="bar-row">
+                    <div class="bar-label">QCOM</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:26%;background:#6b7280"></div></div>
+                    <div class="bar-value" style="color:var(--text-secondary)">13.1x</div>
+                  </div>
+                </div>
+              </div>
+
+              <h3>Summary &amp; Recommendation</h3>
+              <p>NVDA remains the dominant infrastructure play for AI compute. Revenue is up <strong>+122% YoY</strong> with data center now accounting for 87% of sales. Our DCF model implies a fair value of <strong>$148–$162</strong>, suggesting <strong>12–22% upside</strong> from current levels.</p>
+              <ul>
+                <li><strong>Technicals:</strong> RSI 61 (not overbought), trading above 50-day and 200-day MA — trend intact</li>
+                <li><strong>Insider activity:</strong> CEO Jensen Huang sold $45M in March under a pre-planned 10b5-1 plan — routine, not bearish</li>
+                <li><strong>Hype Score: 8.4/10</strong> — elevated Reddit, X, and YouTube coverage; strong but not euphoric</li>
+                <li><strong>Consensus:</strong> 43 Buy / 4 Hold / 0 Sell · avg PT $158.40</li>
+              </ul>
+              <p style="color:var(--muted);font-size:11.5px;margin-top:4px;">Not financial advice. Always do your own research.</p>
+
+              <div class="skeptic-chip">⚠️ Skeptic Review <span style="font-size:10px;color:var(--warn)">▼</span></div>
+              <div class="skeptic-content">
+                <strong>Skeptic Review:</strong><br>
+                • Forward P/E of 42x prices in continued hyper-growth — any slowdown in data center spend could compress multiples sharply<br>
+                • Insider sales of $45M, while 10b5-1 routine, represent a pattern over the past 6 months; worth monitoring<br>
+                • Hype score of 8.4 suggests the narrative is well-priced in; contrarian risk is elevated at this level<br>
+                • Recommended adding at current price assumes technical support holds — stop-loss discipline is essential
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-wrap">
+      <div class="chat-input-inner">
+        <div class="input-box" style="position:relative;">
+          Ask a follow-up question…
+          <div class="input-send"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
+        </div>
+        <div class="disclaimer">Not financial advice · Always do your own research</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ SCREEN 4: PORTFOLIO PAGE ══ -->
+<div class="screen" id="s4">
+<div class="shell">
+  <div class="sidebar">
+    <div class="sidebar-top"><span class="logo">LUCRA</span></div>
+    <div class="sidebar-nav">
+      <div class="nav-pill">Chat</div>
+      <div class="nav-pill active">Portfolio</div>
+    </div>
+    <div style="padding: 10px 12px 4px;">
+      <div class="portfolio-hero">
+        <div class="hero-eyebrow">Total Value</div>
+        <div class="hero-value">$84,320</div>
+        <div class="hero-delta">▲ +$12,480 · +17.4%</div>
+        <div class="alloc-bar">
+          <div class="alloc-seg" style="width:30%;background:oklch(0.55 0.13 250)"></div>
+          <div class="alloc-seg" style="width:22%;background:oklch(0.51 0.13 238)"></div>
+          <div class="alloc-seg" style="width:18%;background:oklch(0.47 0.13 226)"></div>
+          <div class="alloc-seg" style="width:15%;background:oklch(0.43 0.13 214)"></div>
+          <div class="alloc-seg" style="width:15%;background:oklch(0.39 0.13 202)"></div>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-section-hdr"><span class="section-label">HOLDINGS</span></div>
+    <div>
+      <div class="holding-row"><span class="ticker-chip">NVDA</span><span class="holding-name">Nvidia</span><span class="holding-pnl bull">+89.2%</span></div>
+      <div class="holding-row"><span class="ticker-chip">AAPL</span><span class="holding-name">Apple</span><span class="holding-pnl bull">+24.1%</span></div>
+      <div class="holding-row"><span class="ticker-chip">MSFT</span><span class="holding-name">Microsoft</span><span class="holding-pnl bull">+18.7%</span></div>
+      <div class="holding-row"><span class="ticker-chip">TSLA</span><span class="holding-name">Tesla</span><span class="holding-pnl bear">−14.3%</span></div>
+      <div class="holding-row"><span class="ticker-chip">AMD</span><span class="holding-name">AMD</span><span class="holding-pnl bull">+6.8%</span></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="chat-header">
+      <div class="header-left">
+        <span class="header-eyebrow">Monday, May 19th</span>
+        <h1 class="header-title">Portfolio</h1>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- KPI strip -->
+      <div class="kpi-strip">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Value</div>
+          <div class="kpi-value" style="font-size:24px;">$84,320</div>
+          <div class="kpi-delta bull">▲ +$12,480 all-time</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">All-Time Return</div>
+          <div class="kpi-value" style="color:var(--bull)">+17.4%</div>
+          <div class="kpi-sub">since first purchase</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Cost Basis</div>
+          <div class="kpi-value">$71,840</div>
+          <div class="kpi-sub">total invested</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Buying Power</div>
+          <div class="kpi-value">$8,500</div>
+          <div class="kpi-sub">available cash</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">vs S&amp;P 500 YTD</div>
+          <div class="kpi-value" style="color:var(--bull)">+4.2%</div>
+          <div class="kpi-sub" style="font-size:10px;">You +11.8% · SPX +7.6%</div>
+        </div>
+      </div>
+
+      <!-- Charts row -->
+      <div class="two-col" style="margin-bottom:16px;">
+        <!-- Donut -->
+        <div class="card">
+          <div class="card-title">Portfolio Allocation</div>
+          <div class="donut-wrap">
+            <div class="donut">
+              <svg viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e8e8e2" stroke-width="3.5"/>
+                <!-- NVDA 30% -->
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="oklch(0.55 0.13 250)" stroke-width="3.5" stroke-dasharray="30 70" stroke-dashoffset="25" stroke-linecap="round"/>
+                <!-- AAPL 22% -->
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="oklch(0.51 0.13 238)" stroke-width="3.5" stroke-dasharray="22 78" stroke-dashoffset="-5" stroke-linecap="round"/>
+                <!-- MSFT 18% -->
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="oklch(0.47 0.13 226)" stroke-width="3.5" stroke-dasharray="18 82" stroke-dashoffset="-27" stroke-linecap="round"/>
+                <!-- TSLA 15% -->
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="oklch(0.43 0.13 214)" stroke-width="3.5" stroke-dasharray="15 85" stroke-dashoffset="-45" stroke-linecap="round"/>
+                <!-- AMD 15% -->
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="oklch(0.39 0.13 202)" stroke-width="3.5" stroke-dasharray="15 85" stroke-dashoffset="-60" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="donut-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:oklch(0.55 0.13 250)"></div><span class="legend-name">Nvidia</span><span class="legend-pct">30%</span></div>
+              <div class="legend-item"><div class="legend-dot" style="background:oklch(0.51 0.13 238)"></div><span class="legend-name">Apple</span><span class="legend-pct">22%</span></div>
+              <div class="legend-item"><div class="legend-dot" style="background:oklch(0.47 0.13 226)"></div><span class="legend-name">Microsoft</span><span class="legend-pct">18%</span></div>
+              <div class="legend-item"><div class="legend-dot" style="background:oklch(0.43 0.13 214)"></div><span class="legend-name">Tesla</span><span class="legend-pct">15%</span></div>
+              <div class="legend-item"><div class="legend-dot" style="background:oklch(0.39 0.13 202)"></div><span class="legend-name">AMD</span><span class="legend-pct">15%</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Performance bars -->
+        <div class="card">
+          <div class="card-title">Performance by Holding</div>
+          <div class="divergent-chart" style="margin-top:8px;">
+            <div class="div-row">
+              <div class="div-label">NVDA</div>
+              <div class="div-neg"></div>
+              <div class="div-center"></div>
+              <div class="div-pos"><div class="div-bar bar-bull" style="width:90px"></div></div>
+              <div class="div-value bull">+89.2%</div>
+            </div>
+            <div class="div-row">
+              <div class="div-label">AAPL</div>
+              <div class="div-neg"></div>
+              <div class="div-center"></div>
+              <div class="div-pos"><div class="div-bar bar-bull" style="width:24px"></div></div>
+              <div class="div-value bull">+24.1%</div>
+            </div>
+            <div class="div-row">
+              <div class="div-label">MSFT</div>
+              <div class="div-neg"></div>
+              <div class="div-center"></div>
+              <div class="div-pos"><div class="div-bar bar-bull" style="width:18px"></div></div>
+              <div class="div-value bull">+18.7%</div>
+            </div>
+            <div class="div-row">
+              <div class="div-label">AMD</div>
+              <div class="div-neg"></div>
+              <div class="div-center"></div>
+              <div class="div-pos"><div class="div-bar bar-bull" style="width:7px"></div></div>
+              <div class="div-value bull">+6.8%</div>
+            </div>
+            <div class="div-row">
+              <div class="div-label">TSLA</div>
+              <div class="div-neg"><div class="div-bar bar-bear" style="width:14px"></div></div>
+              <div class="div-center"></div>
+              <div class="div-pos"></div>
+              <div class="div-value bear">−14.3%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Holdings table -->
+      <div class="card">
+        <table class="holdings-table">
+          <thead>
+            <tr>
+              <th>Ticker</th><th>Company</th><th>Shares</th><th>Avg Cost</th><th>Current Price</th><th>Market Value</th><th>Gain/Loss</th><th>Return</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="ticker-chip">NVDA</span></td><td>Nvidia Corporation</td><td>50</td><td>$67.40</td><td>$127.62</td><td>$25,324</td>
+              <td class="bull">+$3,011</td><td class="bull">+89.2%</td>
+            </tr>
+            <tr>
+              <td><span class="ticker-chip">AAPL</span></td><td>Apple Inc.</td><td>80</td><td>$152.10</td><td>$188.80</td><td>$15,104</td>
+              <td class="bull">+$2,936</td><td class="bull">+24.1%</td>
+            </tr>
+            <tr>
+              <td><span class="ticker-chip">MSFT</span></td><td>Microsoft</td><td>35</td><td>$340.20</td><td>$403.90</td><td>$14,136</td>
+              <td class="bull">+$2,229</td><td class="bull">+18.7%</td>
+            </tr>
+            <tr>
+              <td><span class="ticker-chip">TSLA</span></td><td>Tesla Inc.</td><td>40</td><td>$225.50</td><td>$193.20</td><td>$7,728</td>
+              <td class="bear">−$1,292</td><td class="bear">−14.3%</td>
+            </tr>
+            <tr>
+              <td><span class="ticker-chip">AMD</span></td><td>Advanced Micro Devices</td><td>60</td><td>$118.30</td><td>$126.34</td><td>$7,580</td>
+              <td class="bull">+$482</td><td class="bull">+6.8%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ SCREEN 5: FULL REPORT VIEW ══ -->
+<div class="screen" id="s5">
+<div class="shell">
+  <div class="sidebar">
+    <div class="sidebar-top"><span class="logo">LUCRA</span></div>
+    <div class="sidebar-nav">
+      <div class="nav-pill active">Chat</div>
+      <div class="nav-pill">Portfolio</div>
+    </div>
+    <div style="padding: 10px 12px 4px;">
+      <div class="portfolio-hero">
+        <div class="hero-value">$84,320</div>
+        <div class="hero-delta">▲ +17.4% all-time</div>
+      </div>
+    </div>
+    <div class="sidebar-recents" style="padding: 12px 16px;">
+      <div class="recent-hdr">RECENT</div>
+      <div class="recent-item" style="font-weight:600;color:var(--accent);">Portfolio risk review — AI exposure</div>
+      <div class="recent-item">NVDA full analysis — add?</div>
+      <div class="recent-item">What's driving Apple 2025?</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="chat-header">
+      <div class="header-left">
+        <span class="header-eyebrow">Monday, May 19th</span>
+        <h1 class="header-title">Research</h1>
+      </div>
+      <div class="mode-toggle">
+        <button class="mode-btn">Chat</button>
+        <button class="mode-btn active">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Agent Mode <span class="mode-badge">15</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="chat-body" style="padding:0;">
+      <div class="report-scroll">
+        <div class="user-msg" style="margin-bottom:20px;">
+          <div class="user-bubble">How concentrated am I in AI and tech? Run a full portfolio risk analysis.</div>
+        </div>
+
+        <div class="assistant-msg">
+          <div class="lucra-avatar">L</div>
+          <div class="response-body">
+            <div class="response-card">
+              <h3>Portfolio Risk Analysis — AI/Tech Concentration</h3>
+
+              <div class="metric-grid">
+                <div class="metric-box">
+                  <div class="metric-label">AI Exposure</div>
+                  <div class="metric-value" style="color:var(--warn)">72%</div>
+                  <div class="metric-note">NVDA + AMD direct</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-label">Tech Sector</div>
+                  <div class="metric-value" style="color:var(--warn)">85%</div>
+                  <div class="metric-note">of total portfolio</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-label">Portfolio Beta</div>
+                  <div class="metric-value">1.42</div>
+                  <div class="metric-note">vs S&P 500</div>
+                </div>
+                <div class="metric-box">
+                  <div class="metric-label">Sharpe Ratio</div>
+                  <div class="metric-value" style="color:var(--bull)">1.87</div>
+                  <div class="metric-note">12-month trailing</div>
+                </div>
+              </div>
+
+              <div class="chart-card">
+                <div class="chart-title">Sector Exposure vs Recommended Diversification</div>
+                <div class="chart-sub">Your portfolio vs a balanced benchmark</div>
+                <div class="bar-chart">
+                  <div class="bar-row">
+                    <div class="bar-label" style="font-size:10.5px;color:var(--warn)">Tech (You)</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:85%;background:var(--warn)"></div></div>
+                    <div class="bar-value" style="color:var(--warn)">85%</div>
+                  </div>
+                  <div class="bar-row">
+                    <div class="bar-label" style="font-size:10.5px;">Tech (Target)</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:30%;background:var(--border-strong)"></div></div>
+                    <div class="bar-value" style="color:var(--muted)">30%</div>
+                  </div>
+                  <div class="bar-row">
+                    <div class="bar-label" style="font-size:10.5px;">Healthcare</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:0%;background:var(--bull)"></div></div>
+                    <div class="bar-value" style="color:var(--muted)">0%</div>
+                  </div>
+                  <div class="bar-row">
+                    <div class="bar-label" style="font-size:10.5px;">Financials</div>
+                    <div class="bar-track"><div class="bar-fill" style="width:0%;background:var(--bull)"></div></div>
+                    <div class="bar-value" style="color:var(--muted)">0%</div>
+                  </div>
+                </div>
+              </div>
+
+              <h3>Key Findings</h3>
+              <ul>
+                <li><strong>High concentration risk:</strong> 85% in tech/AI makes the portfolio highly sensitive to sector-wide selloffs, regulatory actions, or macro shifts away from growth</li>
+                <li><strong>Beta of 1.42</strong> means in a 10% market drawdown, your portfolio is expected to fall ~14.2% — well above average</li>
+                <li><strong>Zero defensive exposure:</strong> No healthcare, utilities, consumer staples, or bonds to act as cushion</li>
+                <li><strong>Strong correlation:</strong> NVDA, AMD, MSFT, and AAPL all move together in AI sentiment shifts — limited diversification benefit between them</li>
+              </ul>
+
+              <h3>Recommendation</h3>
+              <p>Consider trimming NVDA to ~20% (from 30%) after your +89% run and redeploying into 1–2 defensive positions. Adding a healthcare ETF (XLV) or dividend equity (VYM) would meaningfully reduce correlation and volatility.</p>
+              <div class="skeptic-chip">⚠️ Skeptic Review <span style="font-size:10px;color:var(--warn)">▼</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-wrap">
+      <div class="chat-input-inner">
+        <div class="input-box" style="position:relative;">
+          Ask a follow-up…
+          <div class="input-send"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
+        </div>
+        <div class="disclaimer">Not financial advice · Always do your own research</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div><!-- end padding-top -->
+
+<script>
+function show(n) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.screen-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('s' + n).classList.add('active');
+  document.querySelectorAll('.screen-nav button')[n-1].classList.add('active');
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

@@ -1,7 +1,15 @@
-export type ChatMode = "simple" | "agent";
+export type ChatMode = "simple" | "agent" | "deep_research" | "backtest";
 
-/** Total number of sub-agents the CEO can dispatch (excludes the skeptic post-pass) */
-export const AGENT_COUNT = 15;
+export { AGENT_COUNT } from "@/agents/tools/index";
+
+export const PROMPT_TEMPLATES = [
+  { label: "Full analysis", template: "Give me a full analysis of [TICKER] — valuation, technicals, insider activity, and whether I should add to my position." },
+  { label: "Portfolio risk review", template: "Run a full risk analysis on my portfolio. How concentrated am I, what's my beta, and what should I trim or hedge?" },
+  { label: "Earnings check", template: "What earnings are coming up this week that are relevant to my portfolio or the broader market?" },
+  { label: "Sector macro view", template: "What's the current macro environment doing to [SECTOR] stocks? Any tailwinds or headwinds I should know about?" },
+  { label: "Buy/sell decision", template: "Should I buy, hold, or sell [TICKER] right now? Give me a verdict with supporting data." },
+  { label: "Hype vs fundamentals", template: "Is [TICKER] trading on hype or fundamentals? How does the narrative match the numbers?" },
+];
 
 export interface ChatMessage {
   id: string;
@@ -11,19 +19,20 @@ export interface ChatMessage {
   createdAt: string;
   agentTrace?: AgentStep[];
   critique?: string;
+  followups?: string[];
 }
 
 export type AgentName =
-  | "risk_agent"
-  | "news_agent"
-  | "macro_agent"
-  | "technical_agent"
-  | "dcf_agent"
-  | "earnings_agent"
-  | "insider_agent"
-  | "sentiment_agent"
-  | "competitor_agent"
-  | "options_agent"
+  | "run_risk_agent"
+  | "run_news_agent"
+  | "run_macro_agent"
+  | "run_technical_agent"
+  | "run_dcf_agent"
+  | "run_earnings_agent"
+  | "run_insider_agent"
+  | "run_sentiment_agent"
+  | "run_competitor_agent"
+  | "run_options_agent"
   | "run_comparables_agent"
   | "run_graham_agent"
   | "run_analyst_agent"
@@ -32,20 +41,20 @@ export type AgentName =
   | "skeptic_review";
 
 export const AGENT_LABELS: Record<AgentName, string> = {
-  risk_agent: "Risk Analysis",
-  news_agent: "News Research",
-  macro_agent: "Macro & Market",
-  technical_agent: "Technical Analysis",
-  dcf_agent: "DCF Valuation",
-  earnings_agent: "Earnings & Catalysts",
-  insider_agent: "Insider & Institutional",
-  sentiment_agent: "Social Sentiment",
-  competitor_agent: "Competitor Analysis",
-  options_agent: "Options Flow",
+  run_risk_agent: "Risk Analysis",
+  run_news_agent: "News Research",
+  run_macro_agent: "Macro & Market",
+  run_technical_agent: "Technical Analysis",
+  run_dcf_agent: "DCF Valuation",
+  run_earnings_agent: "Earnings & Catalysts",
+  run_insider_agent: "Insider & Institutional",
+  run_sentiment_agent: "Social Sentiment",
+  run_competitor_agent: "Competitor Analysis",
+  run_options_agent: "Options Flow",
   run_comparables_agent: "Comparables",
   run_graham_agent: "Graham Screen",
   run_analyst_agent: "Analyst Consensus",
-  run_hype_agent: "🔥 Hype Score",
+  run_hype_agent: "Hype Score",
   run_fundamentals_agent: "Multi-Year Fundamentals",
   skeptic_review: "Skeptic Review",
 };
@@ -68,6 +77,7 @@ export type AgentEvent =
   | { type: "final_response"; content: string }
   | { type: "skeptic_start" }
   | { type: "skeptic_complete"; critique: string }
+  | { type: "followups"; questions: string[] }
   | { type: "text_delta"; content: string }
   | { type: "done" }
   | { type: "error"; message: string };

@@ -35,7 +35,7 @@ export async function runCompetitorAgent(input: unknown): Promise<string> {
             evEbitda: m["evEbitdaAnnual"] ?? "N/A",
             grossMargin: m["grossMarginTTM"] ? `${m["grossMarginTTM"].toFixed(1)}%` : "N/A",
             netMargin: m["netProfitMarginTTM"] ? `${m["netProfitMarginTTM"].toFixed(1)}%` : "N/A",
-            revenueGrowth5Y: m["revenueGrowth5Y"] ? `${(m["revenueGrowth5Y"] * 100).toFixed(1)}%` : "N/A",
+            revenueGrowth5Y: m["revenueGrowth5Y"] != null ? `${(m["revenueGrowth5Y"]).toFixed(1)}%` : "N/A",
             roe: m["roeTTM"] ? `${m["roeTTM"].toFixed(1)}%` : "N/A",
             debtEquity: m["totalDebt/totalEquityAnnual"] ?? "N/A",
           };

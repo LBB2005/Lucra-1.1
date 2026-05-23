@@ -33,6 +33,20 @@
   --color-bull: #057a55;
   --color-bear: #b42318;
   --color-warn: #b45309;
+  --color-warn-bg: #fffbeb;
+  --color-warn-border: #fde68a;
+  --color-warn-text: #92400e;
+  --color-warn-heading: #b45309;
+
+  /* Deep Research / special modes */
+  --color-deep-research: #7c3aed;
+  --color-deep-research-light: #f3e8ff;
+  --color-deep-research-badge: #ede9fe;
+
+  /* Backtest mode */
+  --color-backtest: #0369a1;
+  --color-backtest-light: #e0f2fe;
+  --color-backtest-badge: #bae6fd;
 
   /* Typography */
   --font-serif: var(--font-playfair), Georgia, "Times New Roman", serif;
@@ -92,6 +106,19 @@ body {
 }
 .fade-in { animation: fade-in 280ms ease-out both; }
 
+/* Thinking panel slide-in */
+@keyframes thinking-fadein {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Verdict block fade-in */
+@keyframes verdict-fadein {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.verdict-fadein { animation: verdict-fadein 220ms ease-out both; }
+
 /* Spin utility */
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -99,3 +126,370 @@ body {
 .markdown-body { font-size: 0.9rem; line-height: 1.75; color: var(--color-text); }
 .markdown-body > *:first-child { margin-top: 0 !important; }
 .markdown-body > *:last-child { margin-bottom: 0 !important; }
+
+/* ============================================================
+   HEDGE FUND sub-app shell
+   ============================================================ */
+
+.hf-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  color: var(--color-text);
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── HF mode: square + darker — scoped to .hf-shell ────────── */
+.hf-shell {
+  --color-bg: #f3f5f8;
+  --color-surface: #e8ebf1;
+  --color-surface-2: #dde1ea;
+  --color-border: #ccd1dd;
+  --color-border-strong: #bbc1cf;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
+}
+
+/* ── Sub-nav ─────────────────────────────────────────────── */
+.hf-subnav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 22px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+  flex-shrink: 0;
+}
+.hf-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition: all 120ms;
+}
+.hf-tab:hover { background: var(--color-surface); color: var(--color-text); }
+.hf-tab.active {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  border-color: color-mix(in oklab, var(--color-accent) 18%, transparent);
+  font-weight: 600;
+}
+.hf-grow { flex: 1; }
+.hf-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  letter-spacing: 0.02em;
+}
+.hf-stat-chip .chip-label {
+  color: var(--color-muted);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 9.5px;
+}
+.hf-stat-chip .chip-pulse {
+  width: 6px; height: 6px; border-radius: 99px;
+  background: var(--color-bull);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-bull) 22%, transparent);
+}
+
+/* ── Body ────────────────────────────────────────────────── */
+.hf-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hf-body > * { flex-shrink: 0; }
+
+/* ── 4-up stat strip ─────────────────────────────────────── */
+.hf-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.hf-cell {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+.hf-cell-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.hf-cell-value {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+.hf-cell-sub {
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 4px;
+}
+
+/* ── Cards ───────────────────────────────────────────────── */
+.hf-card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.hf-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.hf-card-title { font-size: 12px; font-weight: 600; color: var(--color-text); letter-spacing: 0.01em; }
+.hf-card-meta  { font-size: 11px; color: var(--color-muted); }
+
+/* ── Data tables ─────────────────────────────────────────── */
+.hf-table { width: 100%; border-collapse: collapse; }
+.hf-table th, .hf-table td {
+  padding: 7px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+.hf-table th {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  position: sticky; top: 0;
+}
+.hf-table tbody tr:hover { background: var(--color-surface); }
+.hf-table .col-r { text-align: right; font-variant-numeric: tabular-nums; }
+.hf-table .col-mono { font-family: var(--font-mono); }
+.hf-table tbody tr:last-child td { border-bottom: none; }
+
+/* ── Ticker chip ─────────────────────────────────────────── */
+.tk-chip {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+  background: var(--color-accent-light);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ── Side badges (BUY/SELL) ──────────────────────────────── */
+.hf-side {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.hf-side-buy  { color: var(--color-bull); background: color-mix(in oklab, var(--color-bull) 12%, transparent); }
+.hf-side-sell { color: var(--color-bear); background: color-mix(in oklab, var(--color-bear) 12%, transparent); }
+
+/* ── Order status ────────────────────────────────────────── */
+.hf-status {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 99px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+}
+.hf-status-working { color: var(--color-accent); border-color: color-mix(in oklab, var(--color-accent) 24%, transparent); background: var(--color-accent-light); }
+.hf-status-partial  { color: var(--color-warn);   border-color: color-mix(in oklab, var(--color-warn)   24%, transparent); background: color-mix(in oklab, var(--color-warn) 8%, transparent); }
+.hf-status-queued   { color: var(--color-muted); }
+
+/* ── Regime pill ─────────────────────────────────────────── */
+.hf-regime {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+.hf-regime-bull     { color: var(--color-bull); background: color-mix(in oklab, var(--color-bull) 12%, transparent); }
+.hf-regime-bear     { color: var(--color-bear); background: color-mix(in oklab, var(--color-bear) 12%, transparent); }
+.hf-regime-sideways { color: var(--color-warn); background: color-mix(in oklab, var(--color-warn) 12%, transparent); }
+
+/* ── Bar gauge ───────────────────────────────────────────── */
+.hf-gauge { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11.5px; }
+.hf-gauge-label { width: 60px; color: var(--color-text-secondary); }
+.hf-gauge-track { flex: 1; height: 6px; background: var(--color-surface-2); border-radius: 99px; overflow: hidden; }
+.hf-gauge-fill  { height: 100%; border-radius: 99px; }
+.hf-gauge-pct   { width: 48px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ── Transition matrix ───────────────────────────────────── */
+.hf-matrix { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.hf-matrix th, .hf-matrix td {
+  padding: 6px 8px;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  font-variant-numeric: tabular-nums;
+}
+.hf-matrix th {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--color-muted); background: var(--color-surface);
+}
+.hf-matrix td.row-head {
+  background: var(--color-surface); color: var(--color-text-secondary);
+  font-weight: 600; text-align: left;
+}
+
+/* ── HF Buttons ──────────────────────────────────────────── */
+.hf-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; font-size: 11.5px; font-weight: 500;
+  border: 1px solid var(--color-border); background: var(--color-bg);
+  color: var(--color-text); border-radius: 3px; cursor: pointer; transition: all 120ms;
+}
+.hf-btn:hover { background: var(--color-surface); }
+.hf-btn-primary { background: var(--color-accent); color: white; border-color: var(--color-accent); }
+.hf-btn-primary:hover { background: var(--color-accent-hover); }
+.hf-btn-ghost   { border-color: transparent; background: transparent; color: var(--color-text-secondary); }
+.hf-btn-ghost:hover { background: var(--color-surface); color: var(--color-text); }
+.hf-btn-danger  { color: var(--color-bear); border-color: color-mix(in oklab, var(--color-bear) 25%, transparent); }
+.hf-btn-buy  { background: var(--color-bull); color: white; border-color: var(--color-bull); }
+
+/* ── Inputs ──────────────────────────────────────────────── */
+.hf-input {
+  width: 100%; padding: 6px 9px; font-size: 12px; font-family: inherit;
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-radius: 6px; color: var(--color-text); outline: none;
+}
+.hf-input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-accent-light); }
+
+/* ── Activity log ────────────────────────────────────────── */
+.hf-log { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.55; max-height: 360px; overflow-y: auto; padding: 8px 0; }
+.hf-log-row { display: grid; grid-template-columns: 70px 60px 1fr; gap: 10px; padding: 3px 14px; }
+.hf-log-row:hover { background: var(--color-surface); }
+.hf-log-ts  { color: var(--color-muted); }
+.hf-log-lvl { font-weight: 700; letter-spacing: 0.06em; }
+.hf-log-ORDER  { color: var(--color-accent); }
+.hf-log-SIGNAL { color: var(--color-bull); }
+.hf-log-RISK   { color: var(--color-bear); }
+.hf-log-INFO   { color: var(--color-muted); }
+
+/* ── Bot status card ─────────────────────────────────────── */
+.hf-bot-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px;
+  background: color-mix(in oklab, var(--color-bull) 6%, var(--color-bg));
+  border: 1px solid color-mix(in oklab, var(--color-bull) 22%, var(--color-border));
+  border-radius: 10px;
+}
+.hf-bot-light {
+  width: 12px; height: 12px; border-radius: 99px;
+  background: var(--color-bull);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-bull) 26%, transparent);
+  animation: hf-pulse 1.6s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.hf-bot-light-off {
+  width: 12px; height: 12px; border-radius: 99px;
+  background: var(--color-muted);
+  flex-shrink: 0;
+}
+@keyframes hf-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-bull) 26%, transparent); }
+  50%       { box-shadow: 0 0 0 7px color-mix(in oklab, var(--color-bull) 10%, transparent); }
+}
+.hf-bot-lbl { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
+.hf-bot-val { font-family: var(--font-serif); font-size: 20px; font-weight: 700; line-height: 1.1; margin-top: 2px; }
+
+/* ── Strategy card row ───────────────────────────────────── */
+.hf-strat-row {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(4, auto) 100px;
+  gap: 14px;
+  align-items: center;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+.hf-strat-row:last-child { border-bottom: none; }
+.hf-strat-row:hover { background: var(--color-surface); }
+
+/* ── Strategy tag ────────────────────────────────────────── */
+.hf-tag {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; padding: 2px 6px; border-radius: 4px; display: inline-block;
+}
+.hf-tag-live  { color: var(--color-bull);   background: color-mix(in oklab, var(--color-bull) 14%, transparent); }
+.hf-tag-paper { color: var(--color-accent); background: var(--color-accent-light); }
+.hf-tag-draft { color: var(--color-muted);  background: var(--color-surface-2); }
+
+/* ── Markov KPI / mkv grid ───────────────────────────────── */
+.hf-mkv-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 18px; padding: 14px; }
+.hf-mkv-col-label {
+  font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--color-muted); font-weight: 600; margin-bottom: 10px;
+}
+.hf-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.hf-kpi {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: 8px; padding: 8px 10px;
+}
+.hf-kpi-l { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
+.hf-kpi-v { font-family: var(--font-serif); font-size: 16px; font-weight: 700; line-height: 1.1; margin-top: 2px; }
+
+/* ── Allocation rec footer ───────────────────────────────── */
+.hf-rec {
+  border-top: 1px solid var(--color-border);
+  padding: 11px 14px;
+  display: flex; align-items: center; gap: 12px;
+  background: var(--color-surface); font-size: 11.5px; color: var(--color-text-secondary);
+}
+.hf-rec-pct { font-family: var(--font-serif); font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+
+/* ── Eyebrow / headline / dek ────────────────────────────── */
+.hf-eyebrow { font-family: var(--font-serif); font-style: italic; font-size: 11.5px; color: var(--color-muted); }
+.hf-headline { font-family: var(--font-serif); font-size: 19px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.005em; color: var(--color-text); }
+.hf-dek { font-size: 12.5px; color: var(--color-text-secondary); max-width: 72ch; line-height: 1.55; }
+
+/* ── Helpers ─────────────────────────────────────────────── */
+.hf-up   { color: var(--color-bull); }
+.hf-down { color: var(--color-bear); }
+.hf-stat-col .stat-l { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-muted); font-weight: 600; }
+.hf-stat-col .stat-v { font-family: var(--font-serif); font-size: 15px; font-weight: 700; line-height: 1.1; margin-top: 2px; }

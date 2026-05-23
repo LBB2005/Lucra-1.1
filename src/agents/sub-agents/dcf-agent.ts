@@ -41,8 +41,15 @@ export async function runDcfAgent(input: unknown): Promise<string> {
       const capex = Math.abs(cf.find((x: { concept: string }) => x.concept === "PaymentsToAcquirePropertyPlantAndEquipment")?.value ?? 0);
       const fcf = operatingCF - capex;
 
-      const revenue = ic.find((x: { concept: string }) => x.concept === "Revenues")?.value ?? 0;
-      const netIncome = ic.find((x: { concept: string }) => x.concept === "NetIncomeLoss")?.value ?? 0;
+      const revenue =
+        ic.find((x: { concept: string }) => x.concept === "Revenues")?.value ??
+        ic.find((x: { concept: string }) => x.concept === "RevenueFromContractWithCustomerExcludingAssessedTax")?.value ??
+        ic.find((x: { concept: string }) => typeof x.concept === "string" && x.concept.toLowerCase().startsWith("revenue"))?.value ??
+        0;
+      const netIncome =
+        ic.find((x: { concept: string }) => x.concept === "NetIncomeLoss")?.value ??
+        ic.find((x: { concept: string }) => x.concept === "NetIncomeLossAttributableToParentEntity")?.value ??
+        0;
 
       const sharesOutstanding = m["shareOutstanding"] ?? 1;
       let dcfPerShare: number | null = null;
@@ -59,7 +66,7 @@ export async function runDcfAgent(input: unknown): Promise<string> {
         freeCashFlow: fcf ? `$${(fcf / 1e9).toFixed(2)}B` : "N/A",
         peRatio: m["peBasicExclExtraTTM"] ?? "N/A",
         evEbitda: m["currentEv/freeCashFlowAnnual"] ?? "N/A",
-        revenueGrowth: m["revenueGrowth5Y"] ? `${(m["revenueGrowth5Y"] * 100).toFixed(1)}%` : "N/A",
+        revenueGrowth: m["revenueGrowth5Y"] != null ? `${(m["revenueGrowth5Y"]).toFixed(1)}%` : "N/A",
         grossMargin: m["grossMarginTTM"] ? `${(m["grossMarginTTM"]).toFixed(1)}%` : "N/A",
         dcfEstimatePerShare: dcfPerShare ? `$${dcfPerShare.toFixed(2)}` : "Negative FCF — cannot model",
         impliedUpside: dcfPerShare && currentPrice > 0

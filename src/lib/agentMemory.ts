@@ -12,7 +12,7 @@
 
 import { createHash } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import { prisma } from "@/lib/db";
+import { db } from "@/lib/firebase-admin";
 
 // ── TTL configuration (milliseconds) ─────────────────────────────────────────
 
@@ -81,15 +81,19 @@ export async function checkCache(
 ): Promise<string | null> {
   try {
     const key = buildCacheKey(agentName, input);
-    const row = await prisma.agentCache.findUnique({ where: { cacheKey: key } });
-    if (!row) return null;
-    if (row.expiresAt < new Date()) {
+    const snap = await db.collection("agentCache").doc(key).get();
+    if (!snap.exists) return null;
+    const row = snap.data()!;
+    const expiresAt = typeof row.expiresAt === "string"
+      ? new Date(row.expiresAt)
+      : row.expiresAt?.toDate?.() ?? new Date(0);
+    if (expiresAt < new Date()) {
       // Expired — delete lazily (non-blocking)
-      prisma.agentCache.delete({ where: { cacheKey: key } }).catch(() => {});
+      db.collection("agentCache").doc(key).delete().catch(() => {});
       return null;
     }
-    console.log(`[cache HIT] ${agentName} (expires ${row.expiresAt.toISOString()})`);
-    return row.result;
+    console.log(`[cache HIT] ${agentName} (expires ${expiresAt.toISOString()})`);
+    return row.result as string;
   } catch (err) {
     console.error("[agentMemory] checkCache error:", err);
     return null;
@@ -108,11 +112,14 @@ export async function saveCache(
   try {
     const key = buildCacheKey(agentName, input);
     const ttl = AGENT_TTL_MS[agentName] ?? DEFAULT_TTL_MS;
-    const expiresAt = new Date(Date.now() + ttl);
-    await prisma.agentCache.upsert({
-      where: { cacheKey: key },
-      update: { result, expiresAt, createdAt: new Date() },
-      create: { cacheKey: key, agentName, result, expiresAt },
+    const expiresAt = new Date(Date.now() + ttl).toISOString();
+    const now = new Date().toISOString();
+    await db.collection("agentCache").doc(key).set({
+      cacheKey: key,
+      agentName,
+      result,
+      expiresAt,
+      createdAt: now,
     });
   } catch (err) {
     console.error("[agentMemory] saveCache error:", err);
@@ -157,18 +164,20 @@ export async function getTickerMemory(tickers: string[]): Promise<string> {
   try {
     const rows = await Promise.all(
       tickers.map((ticker) =>
-        prisma.tickerMemory.findMany({
-          where: { ticker: ticker.toUpperCase() },
-          orderBy: { createdAt: "desc" },
-          take: MAX_INSIGHTS_PER_TICKER,
-        })
+        db.collection("tickerMemory")
+          .where("ticker", "==", ticker.toUpperCase())
+          .orderBy("createdAt", "desc")
+          .limit(MAX_INSIGHTS_PER_TICKER)
+          .get()
+          .then((snap) => snap.docs.map((d) => d.data()))
       )
     );
     const flat = rows.flat();
     if (!flat.length) return "";
 
     const lines = flat.map((r) => {
-      const date = r.createdAt.toISOString().slice(0, 10);
+      const createdAt = typeof r.createdAt === "string" ? r.createdAt : r.createdAt?.toDate?.().toISOString() ?? "";
+      const date = createdAt.slice(0, 10);
       const src = r.source ? ` · ${r.source}` : "";
       return `[${r.ticker} · ${date}${src}] ${r.insight}`;
     });
@@ -231,22 +240,23 @@ ${finalResponse.slice(0, 3500)}`,
       const insight = line.slice(colonIdx + 1).trim();
       if (!insight || !tickers.includes(ticker)) continue;
 
-      await prisma.tickerMemory.create({
-        data: { ticker, insight },
+      await db.collection("tickerMemory").add({
+        ticker,
+        insight,
+        source: null,
+        createdAt: new Date().toISOString(),
       });
 
       // Prune to cap: delete oldest entries beyond the limit
-      const count = await prisma.tickerMemory.count({ where: { ticker } });
-      if (count > MAX_INSIGHTS_PER_TICKER) {
-        const oldest = await prisma.tickerMemory.findMany({
-          where: { ticker },
-          orderBy: { createdAt: "asc" },
-          take: count - MAX_INSIGHTS_PER_TICKER,
-          select: { id: true },
-        });
-        await prisma.tickerMemory.deleteMany({
-          where: { id: { in: oldest.map((r) => r.id) } },
-        });
+      const allSnap = await db.collection("tickerMemory")
+        .where("ticker", "==", ticker)
+        .orderBy("createdAt", "asc")
+        .get();
+      if (allSnap.size > MAX_INSIGHTS_PER_TICKER) {
+        const toDelete = allSnap.docs.slice(0, allSnap.size - MAX_INSIGHTS_PER_TICKER);
+        const batch = db.batch();
+        toDelete.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
       }
     }
 

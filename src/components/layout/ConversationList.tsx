@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useChatStore } from "@/stores/chatStore";
+import type { ChatMode, AgentStep } from "@/types/chat";
 
 interface ConvMessage {
   id: string; role: string; content: string; mode: string; createdAt: string; agentTrace?: string;
@@ -12,7 +13,8 @@ interface Conversation {
   messages: ConvMessage[];
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+import { authFetch, authFetcher } from "@/lib/authFetch";
+const fetcher = authFetcher;
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -43,28 +45,45 @@ function savePinned(set: Set<string>) {
 
 export default function ConversationList() {
   const router = useRouter();
-  const { data: conversations, mutate } = useSWR<Conversation[]>(
+  const { data: conversations, mutate, isLoading } = useSWR<Conversation[]>(
     "/api/conversations",
     fetcher,
     { refreshInterval: 30_000, revalidateOnFocus: true }
   );
   const [pinned, setPinned] = useState<Set<string>>(getPinned);
+  const [query, setQuery] = useState("");
 
-  const { conversationId, setConversationId, setMessages, setStreaming, clearStreamingContent, clearAgentSteps } = useChatStore();
+  const { conversationId, setConversationId, setMessages, setStreaming, clearStreamingContent, clearAgentSteps, streamingConversationId } = useChatStore();
 
   function loadConversation(conv: Conversation) {
-    setMessages(conv.messages.map((m) => ({
-      id: m.id,
-      role: m.role as "user" | "assistant",
-      content: m.content,
-      mode: m.mode as "simple" | "agent",
-      createdAt: m.createdAt,
-      agentTrace: m.agentTrace ? JSON.parse(m.agentTrace) : undefined,
-    })));
+    setMessages(conv.messages.map((m) => {
+      let agentTrace: AgentStep[] | undefined;
+      if (m.agentTrace) {
+        try { agentTrace = JSON.parse(m.agentTrace); } catch { /* malformed trace — skip */ }
+      }
+      return {
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        mode: (m.mode as ChatMode) || "agent",
+        createdAt: m.createdAt,
+        agentTrace,
+      };
+    }));
     setConversationId(conv.id);
-    setStreaming(false);
-    clearStreamingContent();
-    clearAgentSteps();
+
+    if (conv.id === streamingConversationId) {
+      // Navigating back to the live stream — reconnect the streaming view
+      setStreaming(true);
+    } else {
+      // Navigating to a different conversation — only clear state if no background stream owns it
+      setStreaming(false);
+      if (!streamingConversationId) {
+        clearStreamingContent();
+        clearAgentSteps();
+      }
+    }
+
     router.push("/chat");
   }
 
@@ -80,17 +99,41 @@ export default function ConversationList() {
 
   async function deleteConversation(e: React.MouseEvent, id: string) {
     e.stopPropagation();
-    await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+    await authFetch(`/api/conversations/${id}`, { method: "DELETE" });
     if (conversationId === id) useChatStore.getState().reset();
     mutate();
   }
 
-  if (!conversations?.length) {
-    return <div className="px-3 py-2 text-xs text-[var(--color-muted)]">No chats yet</div>;
+  if (isLoading && !conversations) {
+    return (
+      <div className="flex flex-col gap-0.5 px-1">
+        {[75, 88, 62, 80].map((w, i) => (
+          <div key={i} className="flex items-center gap-2 px-3 py-[7px] rounded-lg animate-pulse">
+            <span className="w-[10px] h-[10px] rounded-full bg-[var(--color-border-strong)] flex-shrink-0" />
+            <span className="h-2 rounded-full bg-[var(--color-border)]" style={{ width: `${w}%` }} />
+          </div>
+        ))}
+      </div>
+    );
   }
 
-  const pinnedConvs = conversations.filter((c) => pinned.has(c.id));
-  const unpinned = conversations.filter((c) => !pinned.has(c.id));
+  const filtered = (Array.isArray(conversations) ? conversations : []).filter((c) => {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return getTitle(c).toLowerCase().includes(q) ||
+      c.messages.some((m) => m.content.toLowerCase().includes(q));
+  });
+
+  if (!filtered.length) {
+    return (
+      <div className="px-3 py-2 text-xs text-[var(--color-muted)]">
+        {query ? "No matching chats" : "No chats yet"}
+      </div>
+    );
+  }
+
+  const pinnedConvs = filtered.filter((c) => pinned.has(c.id));
+  const unpinned = filtered.filter((c) => !pinned.has(c.id));
 
   const groups: Record<string, Conversation[]> = {};
   unpinned.forEach((c) => {
@@ -102,6 +145,7 @@ export default function ConversationList() {
   function ConvRow({ conv }: { conv: Conversation }) {
     const isPinned = pinned.has(conv.id);
     const isActive = conversationId === conv.id;
+    const isLive = streamingConversationId === conv.id;
     return (
       <div
         role="button"
@@ -114,9 +158,15 @@ export default function ConversationList() {
             : "text-[var(--color-text-secondary)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-text)]"
         }`}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="flex-shrink-0 opacity-40">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
+        {isLive ? (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 animate-spin opacity-70" style={{ animationDuration: "1s" }}>
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round" />
+          </svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="flex-shrink-0 opacity-40">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        )}
         <span className="flex-1 truncate text-[11px]">{getTitle(conv)}</span>
         <span className="flex items-center gap-0.5 flex-shrink-0">
           <button
@@ -148,6 +198,28 @@ export default function ConversationList() {
 
   return (
     <div className="flex flex-col gap-0.5">
+      {/* Search */}
+      <div className="px-3 pb-1">
+        <div className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-[8px]" style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)" }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-[var(--color-muted)] flex-shrink-0">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search chats…"
+            className="flex-1 bg-transparent text-[11px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] outline-none"
+          />
+          {query && (
+            <button onClick={() => setQuery("")} className="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
       {/* Pinned */}
       {pinnedConvs.length > 0 && (
         <div>

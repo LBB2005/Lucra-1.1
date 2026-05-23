@@ -199,3 +199,5 @@ export const agentTools: Anthropic.Tool[] = [
     ...({ cache_control: { type: "ephemeral" } } as any),
   },
 ];
+
+export const AGENT_COUNT = agentTools.length;

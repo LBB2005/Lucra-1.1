@@ -1,11 +1,15 @@
 import { runCeoAgent } from "@/agents/ceo";
+import { requireAuth } from "@/lib/requireAuth";
 import type { AgentEvent } from "@/types/chat";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  const { userPrompt, portfolioContext } = await req.json();
+  const { userId, error } = await requireAuth();
+  if (error) return error;
+
+  const { userPrompt, portfolioContext, deepResearch, conversationHistory } = await req.json();
 
   const readable = new ReadableStream({
     async start(controller) {
@@ -16,7 +20,7 @@ export async function POST(req: Request) {
       };
 
       try {
-        await runCeoAgent(userPrompt, portfolioContext ?? "", emit);
+        await runCeoAgent(userPrompt, portfolioContext ?? "", emit, !!deepResearch, conversationHistory ?? [], userId);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         console.error("[agent route error]", err);

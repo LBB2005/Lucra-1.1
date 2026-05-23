@@ -1,22 +1,26 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 export const MODEL = "claude-sonnet-4-6";
+export const HAIKU = "claude-haiku-4-5-20251001";
 
-// Lazily instantiated so the client is only created on first actual use,
-// guaranteeing process.env is fully populated by Next.js before we read it.
-let _client: Anthropic | undefined;
+// Store the singleton on globalThis so it survives Turbopack HMR module
+// re-evaluations. Module-level `let _client` resets on every hot reload,
+// which is what causes "ANTHROPIC_API_KEY is not set" on follow-up requests
+// after any file edit. globalThis persists for the lifetime of the Node.js
+// process regardless of how many times individual modules are re-evaluated.
+const g = globalThis as typeof globalThis & { __anthropicClient?: Anthropic };
 
 function getClient(): Anthropic {
-  if (!_client) {
+  if (!g.__anthropicClient) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       throw new Error(
         "ANTHROPIC_API_KEY is not set. Add it to .env.local and restart the dev server."
       );
     }
-    _client = new Anthropic({ apiKey });
+    g.__anthropicClient = new Anthropic({ apiKey });
   }
-  return _client;
+  return g.__anthropicClient;
 }
 
 // Proxy so all existing `anthropic.messages.create(...)` call-sites keep working

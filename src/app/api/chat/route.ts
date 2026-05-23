@@ -1,4 +1,4 @@
-import { anthropic, MODEL } from "@/lib/anthropic";
+import { anthropic, MODEL, HAIKU } from "@/lib/anthropic";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 
 export const runtime = "nodejs";
@@ -22,6 +22,12 @@ Be concise, data-driven, and actionable. When making recommendations, always not
     messages: messages as MessageParam[],
   });
 
+  const lastUserContent = (messages as MessageParam[]).at(-1);
+  const lastUserText =
+    typeof lastUserContent?.content === "string"
+      ? lastUserContent.content
+      : "";
+
   const readable = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
@@ -35,6 +41,27 @@ Be concise, data-driven, and actionable. When making recommendations, always not
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
           }
         }
+        // Generate follow-up suggestions
+        try {
+          const followupRes = await anthropic.messages.create({
+            model: HAIKU,
+            max_tokens: 120,
+            messages: [{
+              role: "user",
+              content: `Generate exactly 3 short follow-up research questions (max 12 words each). Return a JSON array of strings only.\n\nQuestion: ${lastUserText.slice(0, 200)}`,
+            }],
+          });
+          const raw = followupRes.content.find((b) => b.type === "text")?.text ?? "";
+          const match = raw.match(/\[[\s\S]*\]/);
+          if (match) {
+            const questions = JSON.parse(match[0]) as string[];
+            if (Array.isArray(questions) && questions.length > 0) {
+              controller.enqueue(encoder.encode(
+                `data: ${JSON.stringify({ followups: questions.slice(0, 3).map(String) })}\n\n`
+              ));
+            }
+          }
+        } catch { /* follow-ups are best-effort */ }
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Stream error";

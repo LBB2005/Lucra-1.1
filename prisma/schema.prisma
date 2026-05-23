@@ -19,6 +19,15 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // App relations
+  holdings          Holding[]
+  portfolioSettings PortfolioSettings?
+  conversations     Conversation[]
+  strategies        Strategy[]
+  preference        UserPreference?
+  briefings         Briefing[]
+  backtests         Backtest[]
+
   @@map("users")
 }
 
@@ -63,7 +72,9 @@ model VerificationToken {
 // ── App models ───────────────────────────────────────────────────────────────
 model Holding {
   id          String   @id @default(cuid())
-  ticker      String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker      String
   companyName String?
   shares      Float
   avgCost     Float
@@ -71,24 +82,31 @@ model Holding {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@unique([ticker, userId])
+  @@index([userId])
   @@map("holdings")
 }
 
 model PortfolioSettings {
-  id           String   @id @default("default")
-  cashBalance  Float    @default(0)
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cashBalance Float    @default(0)
+  updatedAt   DateTime @updatedAt
 
   @@map("portfolio_settings")
 }
 
 model Conversation {
   id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
 
+  @@index([userId])
   @@map("conversations")
 }
 
@@ -129,4 +147,81 @@ model TickerMemory {
 
   @@index([ticker, createdAt])
   @@map("ticker_memory")
+}
+
+model MarkovResult {
+  id        String   @id @default(cuid())
+  ticker    String
+  years     Int      @default(5)
+  result    String   // JSON-encoded MarkovData
+  createdAt DateTime @default(now())
+
+  @@unique([ticker, years])
+  @@index([createdAt])
+  @@map("markov_results")
+}
+
+model Strategy {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  tag       String
+  desc      String   @default("")
+  tickers   String   @default("[]")    // JSON: string[]
+  config    String   @default("{}")    // JSON: bot execution parameters
+  research  String   @default("")     // markdown: rationale, data, prior research
+  sharpe    Float    @default(0)
+  cagr      Float    @default(0)
+  maxDD     Float    @default(0)
+  winRate   Float    @default(0)
+  active    Boolean  @default(false)
+  lastTrade String   @default("—")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("strategies")
+}
+
+// ── User preference (investing style memory) ─────────────────────────────────
+
+model UserPreference {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  style     String   @default("{}")  // JSON: { horizon, riskTolerance, style, sectors, priorities }
+  updatedAt DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+// ── Weekly briefings ──────────────────────────────────────────────────────────
+
+model Briefing {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String                        // markdown report
+  tickers   String   @default("[]")       // JSON: string[] — tickers covered
+  readAt    DateTime?                     // null = unread
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("briefings")
+}
+
+// ── NL backtests ──────────────────────────────────────────────────────────────
+
+model Backtest {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  query     String                        // original NL query
+  config    String   @default("{}")       // JSON: parsed strategy config
+  result    String   @default("{}")       // JSON: BacktestResult
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("backtests")
 }

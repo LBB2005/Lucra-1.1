@@ -1,32 +1,39 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { db, serializeDoc } from "@/lib/firebase-admin";
+import { requireAuth } from "@/lib/requireAuth";
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { userId, error } = await requireAuth();
+  if (error) return error;
   try {
     const { id } = await params;
     const body = await req.json();
     const { role, content, mode = "simple", agentTrace } = body;
 
-    const message = await prisma.message.create({
-      data: {
-        conversationId: id,
-        role,
-        content,
-        mode,
-        agentTrace: agentTrace ? JSON.stringify(agentTrace) : null,
-      },
+    // Verify the conversation belongs to this user
+    const convRef = db.collection("users").doc(userId).collection("conversations").doc(id);
+    const convSnap = await convRef.get();
+    if (!convSnap.exists) {
+      return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+    }
+
+    const now = new Date().toISOString();
+    const msgRef = await convRef.collection("messages").add({
+      conversationId: id,
+      role,
+      content,
+      mode,
+      agentTrace: agentTrace ? JSON.stringify(agentTrace) : null,
+      createdAt: now,
     });
 
-    // Touch conversation updatedAt
-    await prisma.conversation.update({
-      where: { id },
-      data: { updatedAt: new Date() },
-    });
+    await convRef.update({ updatedAt: now });
 
-    return NextResponse.json(message, { status: 201 });
+    const msgSnap = await msgRef.get();
+    return NextResponse.json(serializeDoc(msgSnap.id, msgSnap.data()!), { status: 201 });
   } catch (err) {
     console.error("[messages POST]", err);
     return NextResponse.json({ error: "Failed to save message" }, { status: 500 });

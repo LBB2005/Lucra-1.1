@@ -1,4 +1,4 @@
-import { anthropic, MODEL } from "@/lib/anthropic";
+import { anthropic, MODEL, HAIKU } from "@/lib/anthropic";
 import { agentTools } from "./tools/index";
 import { runRiskAgent } from "./sub-agents/risk-agent";
 import { runNewsAgent } from "./sub-agents/news-agent";
@@ -16,6 +16,7 @@ import { runAnalystAgent } from "./sub-agents/analyst-agent";
 import { runHypeAgent } from "./sub-agents/hype-agent";
 import { runFundamentalsAgent } from "./sub-agents/fundamentals-agent";
 import { checkCache, saveCache, extractTickers, getTickerMemory, saveTickerMemory } from "@/lib/agentMemory";
+import { getUserPreference, buildStylePrompt, updateStyleFromConversation } from "@/lib/userPreference";
 import type { AgentEvent, AgentName } from "@/types/chat";
 import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 
@@ -66,12 +67,15 @@ const agentDispatch: Record<string, (input: unknown) => Promise<string>> = {
   run_fundamentals_agent: runFundamentalsAgent,
 };
 
-const SKEPTIC_MODEL = "claude-haiku-4-5-20251001";
+const SKEPTIC_MODEL = HAIKU;
 
 export async function runCeoAgent(
   userPrompt: string,
   portfolioContext: string,
-  emit: EventEmitter
+  emit: EventEmitter,
+  deepResearch = false,
+  conversationHistory: { role: "user" | "assistant"; content: string }[] = [],
+  userId?: string
 ) {
   const systemPrompt = `You are Lucra's CEO Research Agent — an expert AI financial analyst managing a team of specialized sub-agents. Your job is to:
 1. Understand what the user wants
@@ -143,14 +147,33 @@ Use charts liberally:
     ]),
   ];
   const memoryBlock = await getTickerMemory(mentionedTickers);
-  const fullSystemPrompt = memoryBlock
-    ? systemPrompt + "\n\n" + memoryBlock
-    : systemPrompt;
+  const userStyle = userId ? await getUserPreference(userId) : undefined;
+  const stylePrompt = userStyle ? buildStylePrompt(userStyle) : "";
+  const deepResearchAddendum = deepResearch ? `
 
-  const messages: MessageParam[] = [{ role: "user", content: userPrompt }];
+## Deep Research Mode — ACTIVE
+You are running in Deep Research mode. This means:
+- Deploy ALL available sub-agents regardless of question scope — be exhaustive, not selective
+- Prioritize comprehensive web research: always call run_news_agent, run_hype_agent, and run_macro_agent even for single-stock questions
+- Run competitor and comparables agents to provide full market context
+- Increase analysis depth: include 3–5 year trend data, multiple valuation methods, and cross-agent contradiction checks
+- Your final report should be 50% longer than normal, with additional sections on risks, catalysts, and alternative scenarios
+- Label your response with "🔬 Deep Research" at the top` : "";
+
+  const fullSystemPrompt = [
+    systemPrompt,
+    deepResearchAddendum,
+    memoryBlock,
+    stylePrompt,
+  ].filter(Boolean).join("\n\n");
+
+  const messages: MessageParam[] = [
+    ...conversationHistory,
+    { role: "user", content: userPrompt },
+  ];
 
   let iteration = 0;
-  const MAX_ITERATIONS = 10;
+  const MAX_ITERATIONS = deepResearch ? 15 : 10;
   // Accumulate sub-agent outputs for the skeptic pass
   const agentOutputs = new Map<string, string>();
   let finalResponse = "";
@@ -182,10 +205,15 @@ Use charts liberally:
         .map((b) => (b as { type: string; text: string }).text)
         .join("\n\n");
       emit({ type: "final_response", content: finalResponse });
-      // Fire-and-forget: extract insights and save to memory after response is sent
+      // Fire-and-forget: save ticker memory and update user investing style
       saveTickerMemory(mentionedTickers, finalResponse, anthropic).catch((e) =>
         console.error("[memory] save error:", e)
       );
+      if (userId) {
+        updateStyleFromConversation(userId, userPrompt, finalResponse, anthropic).catch((e) =>
+          console.error("[userPreference] update error:", e)
+        );
+      }
       break;
     }
 
@@ -304,6 +332,30 @@ Be direct and constructive. Start with "**Skeptic Review:**"`,
     } catch {
       // Skeptic is best-effort — don't fail the whole response
       emit({ type: "skeptic_complete", critique: "" });
+    }
+  }
+
+  // Generate 3 follow-up questions (quick Haiku call — completes before stream closes)
+  if (finalResponse) {
+    try {
+      const followupRes = await anthropic.messages.create({
+        model: SKEPTIC_MODEL,
+        max_tokens: 120,
+        messages: [{
+          role: "user",
+          content: `Generate exactly 3 short follow-up research questions (max 12 words each) based on this question. Return a JSON array of strings only, no other text.\n\nQuestion: ${userPrompt.slice(0, 200)}`,
+        }],
+      });
+      const raw = followupRes.content.find((b) => b.type === "text")?.text ?? "";
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (match) {
+        const questions = JSON.parse(match[0]) as string[];
+        if (Array.isArray(questions) && questions.length > 0) {
+          emit({ type: "followups", questions: questions.slice(0, 3).map(String) });
+        }
+      }
+    } catch {
+      // Follow-ups are best-effort — don't fail the response
     }
   }
 
