@@ -10,6 +10,8 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as firebaseSignOut,
   User,
 } from "firebase/auth";
@@ -36,6 +38,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
+    // Handle redirect result on page load (after Google redirect back)
+    getRedirectResult(auth).catch(() => {});
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
@@ -51,7 +56,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [pathname, router]);
 
   async function signIn() {
-    await signInWithPopup(auth, googleProvider);
+    try {
+      // Try popup first (works in most desktop browsers)
+      await signInWithPopup(auth, googleProvider);
+    } catch (err: unknown) {
+      // Fall back to redirect if popup is blocked
+      const code = (err as { code?: string })?.code;
+      if (code === "auth/popup-blocked" || code === "auth/popup-closed-by-user") {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        throw err;
+      }
+    }
   }
 
   async function signOut() {
