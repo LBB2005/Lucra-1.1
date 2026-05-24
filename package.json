@@ -7,8 +7,8 @@
     "build": "node node_modules/next/dist/bin/next build",
     "start": "node node_modules/next/dist/bin/next start",
     "lint": "eslint",
-    "postinstall": "prisma generate",
-    "vercel-build": "prisma db push && node node_modules/next/dist/bin/next build"
+    "postinstall": "npx prisma generate",
+    "vercel-build": "npx prisma db push && node node_modules/next/dist/bin/next build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.2",
