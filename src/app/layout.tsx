@@ -36,6 +36,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full`}
       suppressHydrationWarning
     >
+      <head>
+        {/* Apply stored theme before first paint to avoid flash */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('lucra-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}` }} />
+      </head>
       <body className="h-full flex overflow-hidden bg-[var(--color-bg)]">
         <AuthProvider>
           <Sidebar />

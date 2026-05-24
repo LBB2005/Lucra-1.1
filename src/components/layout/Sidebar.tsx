@@ -1,11 +1,12 @@
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useChatStore } from "@/stores/chatStore";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useQuotes } from "@/hooks/useQuotes";
+import { useAuth } from "@/context/AuthContext";
 import ConversationList from "./ConversationList";
 import PortfolioList from "./PortfolioList";
 import AddHoldingModal from "@/components/portfolio/AddHoldingModal";
@@ -13,6 +14,7 @@ import CsvUploadModal from "@/components/portfolio/CsvUploadModal";
 import StatementUploadModal from "@/components/portfolio/StatementUploadModal";
 import BriefingModal from "@/components/briefing/BriefingModal";
 import type { HoldingFormData } from "@/types/portfolio";
+import { authFetch, authFetcher } from "@/lib/authFetch";
 
 interface BriefingSummary {
   id: string;
@@ -22,7 +24,6 @@ interface BriefingSummary {
   content: string;
 }
 
-import { authFetch, authFetcher } from "@/lib/authFetch";
 const fetcher = authFetcher;
 
 function BriefingBanner() {
@@ -199,6 +200,205 @@ function PortfolioHero() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+interface UserProfile {
+  name: string | null;
+  plan: string;
+}
+
+function UserWidget() {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const ref = useRef<HTMLDivElement>(null);
+  const { data } = useSWR<UserProfile>(user ? "/api/user" : null, authFetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 120_000,
+  });
+
+  useEffect(() => {
+    const stored = localStorage.getItem("lucra-theme") as "light" | "dark" | null;
+    setTheme(stored ?? "light");
+  }, []);
+
+  useEffect(() => {
+    function onOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    localStorage.setItem("lucra-theme", next);
+    if (next === "dark") {
+      document.documentElement.setAttribute("data-theme", "dark");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+    setOpen(false);
+  }
+
+  if (!user) return null;
+
+  const displayName = data?.name ?? user.displayName ?? user.email ?? "User";
+  const plan = data?.plan ?? "Pro";
+  const initials = displayName
+    .split(" ")
+    .map((w: string) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  const MENU = [
+    {
+      label: "Settings",
+      icon: (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      ),
+      action: () => { router.push("/settings"); setOpen(false); },
+    },
+    {
+      label: "View profile",
+      icon: (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      ),
+      action: () => { router.push("/settings?section=account"); setOpen(false); },
+    },
+    {
+      label: theme === "light" ? "Dark mode" : "Light mode",
+      icon:
+        theme === "light" ? (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+        ),
+      action: toggleTheme,
+    },
+    {
+      label: "Sign out",
+      icon: (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+      ),
+      action: signOut,
+      danger: true,
+    },
+  ];
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0 mx-[10px] mb-3">
+      {/* Dropdown — opens above */}
+      {open && (
+        <div
+          className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-[10px] py-1 overflow-hidden"
+          style={{
+            background: "var(--color-bg)",
+            border: "1px solid var(--color-border)",
+            boxShadow: "var(--shadow-pop)",
+          }}
+        >
+          {MENU.map((item) => (
+            <button
+              key={item.label}
+              onClick={item.action}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[12.5px] font-medium text-left transition-colors duration-100"
+              style={{ color: item.danger ? "var(--color-bear)" : "var(--color-text)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-surface)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{ color: item.danger ? "var(--color-bear)" : "var(--color-muted)" }}>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Trigger button */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2.5 px-[10px] py-[8px] rounded-[9px] transition-colors duration-150"
+        style={{
+          background: open ? "var(--color-surface)" : "transparent",
+          border: "1px solid",
+          borderColor: open ? "var(--color-border)" : "transparent",
+        }}
+        onMouseEnter={(e) => {
+          if (!open) {
+            e.currentTarget.style.background = "var(--color-surface)";
+            e.currentTarget.style.borderColor = "var(--color-border)";
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!open) {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.borderColor = "transparent";
+          }
+        }}
+      >
+        {/* Avatar */}
+        {user.photoURL ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={user.photoURL}
+            alt={displayName}
+            className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+          />
+        ) : (
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0"
+            style={{ background: "var(--color-accent-light)", color: "var(--color-accent)" }}
+          >
+            {initials}
+          </div>
+        )}
+
+        {/* Name + plan */}
+        <div className="flex-1 min-w-0 text-left">
+          <p className="text-[12px] font-semibold leading-tight truncate" style={{ color: "var(--color-text)" }}>
+            {displayName}
+          </p>
+          <p className="text-[10.5px] leading-tight" style={{ color: "var(--color-muted)" }}>
+            {plan}
+          </p>
+        </div>
+
+        {/* Chevron */}
+        <svg
+          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          className={`flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          style={{ color: "var(--color-muted)" }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -451,6 +651,11 @@ export default function Sidebar() {
           Recent
         </p>
         <ConversationList />
+      </div>
+
+      {/* User widget */}
+      <div className="flex-shrink-0 border-t" style={{ borderColor: "var(--color-border)" }}>
+        <UserWidget />
       </div>
 
       {/* Resize handle */}
