@@ -4,6 +4,7 @@ const KEY = process.env.POLYGON_API_KEY;
 async function polyFetch(path: string) {
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${BASE}${path}${sep}apiKey=${KEY}`, {
+    signal: AbortSignal.timeout(10_000),
     next: { revalidate: 30 },
   });
   if (!res.ok) throw new Error(`Polygon ${res.status}: ${path}`);

@@ -13,7 +13,8 @@ export async function GET(req: Request) {
 
   if (!process.env.FINNHUB_API_KEY) {
     return NextResponse.json(
-      tickers.map((t) => ({ ticker: t, price: 0, change: 0, changePct: 0, volume: 0 }))
+      { error: "Quote service not configured (FINNHUB_API_KEY missing)." },
+      { status: 503 }
     );
   }
 

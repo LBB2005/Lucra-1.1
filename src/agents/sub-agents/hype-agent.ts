@@ -60,6 +60,7 @@ NOTABLE QUOTES/POSTS:
   try {
     const res = await fetch(PERPLEXITY_API, {
       method: "POST",
+      signal: AbortSignal.timeout(45_000),
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,

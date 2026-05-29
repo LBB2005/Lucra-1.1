@@ -34,8 +34,10 @@ export async function POST(req: Request) {
   return new Response(readable, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      // Disable proxy/CDN buffering so SSE chunks flush immediately on Vercel.
+      "X-Accel-Buffering": "no",
     },
   });
 }

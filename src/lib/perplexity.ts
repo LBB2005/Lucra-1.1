@@ -9,6 +9,7 @@ export async function perplexitySearch(
 
   const res = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
+    signal: AbortSignal.timeout(30_000),
     headers: {
       Authorization: `Bearer ${KEY}`,
       "Content-Type": "application/json",

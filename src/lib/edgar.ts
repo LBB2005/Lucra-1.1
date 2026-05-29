@@ -4,6 +4,7 @@ const USER_AGENT = "Lucra App liamblackshawbrown@gmail.com";
 async function edgarFetch(url: string) {
   const res = await fetch(url, {
     headers: { "User-Agent": USER_AGENT },
+    signal: AbortSignal.timeout(10_000),
     next: { revalidate: 3600 },
   });
   if (!res.ok) throw new Error(`EDGAR ${res.status}: ${url}`);
@@ -18,6 +19,7 @@ async function getCikMap(): Promise<Record<string, string>> {
   try {
     const res = await fetch("https://www.sec.gov/files/company_tickers.json", {
       headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(10_000),
       next: { revalidate: 86400 }, // refresh daily
     });
     if (!res.ok) throw new Error(`company_tickers.json ${res.status}`);
@@ -172,6 +174,7 @@ export async function searchRecentForm4(ticker: string, daysBack = 3, limit = 10
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return [];
     const data = await res.json();

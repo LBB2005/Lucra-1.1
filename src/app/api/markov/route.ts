@@ -7,6 +7,10 @@ import path from "path";
 
 const execAsync = promisify(exec);
 
+// Tickers are interpolated into a shell command, so they must be strictly validated
+// to prevent command injection. Allow letters, digits, dot and hyphen only.
+const TICKER_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/;
+
 export interface MarkovData {
   ticker: string;
   years: number;
@@ -154,12 +158,24 @@ async function runMarkov(ticker: string, years: number): Promise<MarkovData> {
   const uvPath = process.env.UV_PATH
     ?? path.join(os.homedir(), ".local/bin/uv");
 
+  if (!TICKER_RE.test(ticker)) {
+    throw new Error(`Invalid ticker symbol: ${ticker}`);
+  }
+  const safeYears = Number.isFinite(years) && years > 0 && years <= 50 ? Math.floor(years) : 5;
+
   const { stdout } = await execAsync(
-    `"${uvPath}" run python -m markov_hedge_fund_method.run --ticker ${ticker} --years ${years}`,
+    `"${uvPath}" run python -m markov_hedge_fund_method.run --ticker ${ticker} --years ${safeYears}`,
     { cwd: skillDir, timeout: 120_000 }
   );
 
-  return parseMarkovOutput(stdout, ticker, years);
+  const data = parseMarkovOutput(stdout, ticker, safeYears);
+  // If the script output drifts, every regex misses and we'd cache an all-zero matrix
+  // as a real signal. Reject that so the caller sees an error instead of fake data.
+  const statSum = data.stationary.Bear + data.stationary.Sideways + data.stationary.Bull;
+  if (data.rows === 0 || statSum < 1) {
+    throw new Error(`Markov parse failed for ${ticker} — unexpected script output`);
+  }
+  return data;
 }
 
 // GET /api/markov?tickers=SPY,QQQ,DIA&years=5&force=1

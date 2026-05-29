@@ -1,11 +1,14 @@
 import { getAggregates } from "@/lib/polygon";
+import { getAlpacaBars, hasAlpacaData } from "@/lib/alpaca";
 
 const BASE = "https://finnhub.io/api/v1";
 const KEY = process.env.FINNHUB_API_KEY;
+const FETCH_TIMEOUT_MS = 10_000;
 
 async function fhFetch(path: string) {
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${BASE}${path}${sep}token=${KEY}`, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     next: { revalidate: 30 },
   });
   if (!res.ok) throw new Error(`Finnhub ${res.status}: ${path}`);
@@ -24,12 +27,19 @@ export interface TickerSnapshot {
   prevClose: number;
 }
 
-// Real-time quote for a single ticker
+// Real-time quote for a single ticker.
+// Finnhub returns all-zero fields for unknown symbols (and null on some errors).
+// Throw in that case so getSnapshots drops the ticker instead of surfacing $0 as a
+// real price — a fabricated zero is worse than a missing row in a finance app.
 export async function getQuote(ticker: string): Promise<TickerSnapshot> {
   const d = await fhFetch(`/quote?symbol=${ticker}`);
+  const price = d.c;
+  if (typeof price !== "number" || price <= 0) {
+    throw new Error(`No quote available for ${ticker}`);
+  }
   return {
     ticker,
-    price: d.c ?? 0,
+    price,
     change: d.d ?? 0,
     changePct: d.dp ?? 0,
     volume: 0,
@@ -108,8 +118,9 @@ async function getCandlesFromPolygon(
 //
 // Finnhub's /stock/candle endpoint is premium-gated (returns 403 on free/standard
 // plans) even though /quote still works. We therefore try Finnhub first and
-// transparently fall back to Polygon aggregates, returning the same shape so every
-// caller (technical agent, risk agent, backtest) keeps working regardless of plan.
+// transparently fall back to Alpaca market data (primary) then Polygon aggregates,
+// returning the same shape so every caller (technical agent, risk agent, backtest)
+// keeps working regardless of plan.
 export async function getCandles(
   ticker: string,
   resolution: string,
@@ -124,6 +135,15 @@ export async function getCandles(
       if (data?.s === "ok" && Array.isArray(data.c) && data.c.length > 0) {
         return data;
       }
+    } catch {
+      /* fall through to Alpaca / Polygon */
+    }
+  }
+
+  if (hasAlpacaData()) {
+    try {
+      const data = await getAlpacaBars(ticker, resolution, fromTs, toTs);
+      if (data.s === "ok" && data.c.length > 0) return data;
     } catch {
       /* fall through to Polygon */
     }

@@ -34,8 +34,10 @@ export async function runDcfAgent(input: unknown): Promise<string> {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const latestReport = (financials.data ?? [])[0]?.report ?? {};
-      const cf = latestReport.cf ?? {};
-      const ic = latestReport.ic ?? {};
+      // Finnhub returns these as arrays; guard so a missing/object value can't throw
+      // (.find on {}) and silently nuke the whole valuation.
+      const cf = Array.isArray(latestReport.cf) ? latestReport.cf : [];
+      const ic = Array.isArray(latestReport.ic) ? latestReport.ic : [];
 
       const operatingCF = cf.find((x: { concept: string }) => x.concept === "NetCashProvidedByUsedInOperatingActivities")?.value ?? 0;
       const capex = Math.abs(cf.find((x: { concept: string }) => x.concept === "PaymentsToAcquirePropertyPlantAndEquipment")?.value ?? 0);
@@ -51,7 +53,12 @@ export async function runDcfAgent(input: unknown): Promise<string> {
         ic.find((x: { concept: string }) => x.concept === "NetIncomeLossAttributableToParentEntity")?.value ??
         0;
 
-      const sharesOutstanding = m["shareOutstanding"] ?? 1;
+      // Never default share count to 1 — that turns enterprise value into a bogus
+      // per-share figure. Leave the per-share estimate null when shares are unknown.
+      const sharesOutstanding =
+        typeof m["shareOutstanding"] === "number" && m["shareOutstanding"] > 0
+          ? m["shareOutstanding"]
+          : 0;
       let dcfPerShare: number | null = null;
       if (fcf > 0 && sharesOutstanding > 0) {
         const ev = runDCF(fcf, 0.07, terminalGrowth, wacc);
@@ -68,7 +75,11 @@ export async function runDcfAgent(input: unknown): Promise<string> {
         evEbitda: m["currentEv/freeCashFlowAnnual"] ?? "N/A",
         revenueGrowth: m["revenueGrowth5Y"] != null ? `${(m["revenueGrowth5Y"]).toFixed(1)}%` : "N/A",
         grossMargin: m["grossMarginTTM"] ? `${(m["grossMarginTTM"]).toFixed(1)}%` : "N/A",
-        dcfEstimatePerShare: dcfPerShare ? `$${dcfPerShare.toFixed(2)}` : "Negative FCF — cannot model",
+        dcfEstimatePerShare: dcfPerShare
+          ? `$${dcfPerShare.toFixed(2)}`
+          : fcf <= 0
+            ? "Negative FCF — cannot model"
+            : "Insufficient data (missing share count) — cannot model",
         impliedUpside: dcfPerShare && currentPrice > 0
           ? `${(((dcfPerShare - currentPrice) / currentPrice) * 100).toFixed(1)}%`
           : "N/A",

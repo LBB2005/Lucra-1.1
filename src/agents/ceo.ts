@@ -22,7 +22,9 @@ import type { MessageParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resou
 
 type EventEmitter = (event: AgentEvent) => void;
 
-// Deep agents run complex multi-step analysis or external APIs — no timeout cap
+// Deep agents run complex multi-step analysis or external APIs — they get a longer
+// wall-clock cap, but every agent is still capped so one stuck upstream can't hang
+// the whole run until the Vercel function limit (maxDuration) kills it mid-stream.
 const DEEP_AGENTS = new Set([
   "run_dcf_agent",
   "run_insider_agent",
@@ -33,11 +35,12 @@ const DEEP_AGENTS = new Set([
   "run_fundamentals_agent",  // EDGAR XBRL fetches can be large
 ]);
 const STANDARD_TIMEOUT_MS = 60_000;
+const DEEP_AGENT_TIMEOUT_MS = 120_000;
 
-// Per-agent timeout overrides (ms) — used instead of STANDARD_TIMEOUT_MS when set
+// Per-agent timeout overrides (ms) — used instead of the standard/deep defaults when set
 const AGENT_TIMEOUT_MS: Record<string, number> = {
-  run_macro_agent: 300_000, // 5 minutes — multi-source macro data fetching can be slow
-  run_risk_agent:  300_000, // 5 minutes — portfolio-wide beta/correlation analysis
+  run_macro_agent: 120_000, // multi-source macro data fetching can be slow
+  run_risk_agent:  120_000, // portfolio-wide beta/correlation analysis
 };
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -199,11 +202,19 @@ You are running in Deep Research mode. This means:
       }
     }
 
-    if (response.stop_reason === "end_turn") {
-      finalResponse = response.content
+    // Treat end_turn and max_tokens as terminal-with-content: when the model hits
+    // the token cap mid-report we must keep the partial text, not discard it.
+    if (response.stop_reason === "end_turn" || response.stop_reason === "max_tokens") {
+      const text = response.content
         .filter((b) => b.type === "text")
         .map((b) => (b as { type: string; text: string }).text)
         .join("\n\n");
+      finalResponse =
+        text +
+        (response.stop_reason === "max_tokens" && text
+          ? "\n\n_⚠️ This response reached the length limit and may be cut off._"
+          : "");
+      if (!finalResponse) finalResponse = "Analysis complete.";
       emit({ type: "final_response", content: finalResponse });
       // Fire-and-forget: save ticker memory and update user investing style
       saveTickerMemory(mentionedTickers, finalResponse, anthropic).catch((e) =>
@@ -256,10 +267,10 @@ You are running in Deep Research mode. This means:
           }
 
           const run = handler(block.input);
-          const agentTimeoutMs = AGENT_TIMEOUT_MS[block.name] ?? STANDARD_TIMEOUT_MS;
-          const result = DEEP_AGENTS.has(block.name)
-            ? await run
-            : await withTimeout(run, agentTimeoutMs, block.name);
+          const agentTimeoutMs =
+            AGENT_TIMEOUT_MS[block.name] ??
+            (DEEP_AGENTS.has(block.name) ? DEEP_AGENT_TIMEOUT_MS : STANDARD_TIMEOUT_MS);
+          const result = await withTimeout(run, agentTimeoutMs, block.name);
 
           // ── Cache save (non-blocking) ─────────────────────────────────────
           saveCache(block.name, block.input, result).catch((e) =>
@@ -288,6 +299,16 @@ You are running in Deep Research mode. This means:
 
     emit({ type: "ceo_compiling" });
     messages.push({ role: "user", content: toolResults });
+  }
+
+  // If the loop exhausted MAX_ITERATIONS while still requesting tools, finalResponse
+  // is empty — emit a fallback so the client never sees a silent blank/hang.
+  if (!finalResponse) {
+    emit({
+      type: "final_response",
+      content:
+        "I gathered data from several agents but ran out of analysis steps before compiling a final answer. Please try a narrower question or fewer tickers.",
+    });
   }
 
   // ── Skeptic validation pass ──────────────────────────────────────────────

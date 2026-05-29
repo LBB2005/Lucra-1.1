@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/requireAuth";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const { error } = await requireAuth();
@@ -81,8 +82,10 @@ Be concise, data-driven, and actionable. When making recommendations, always not
   return new Response(readable, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      // Disable proxy/CDN buffering so SSE chunks flush immediately on Vercel.
+      "X-Accel-Buffering": "no",
     },
   });
 }
