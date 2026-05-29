@@ -223,25 +223,28 @@ export default function ChatContainer() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let fullContent = "";
+      let sseBuffer = "";
+
+      function processLine(line: string) {
+        if (!line.startsWith("data: ")) return;
+        const data = line.slice(6);
+        if (data === "[DONE]") return;
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.text) { appendStreamChunk(parsed.text); fullContent += parsed.text; }
+          if (parsed.followups) setPendingFollowups(parsed.followups);
+        } catch { /* ignore */ }
+      }
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
-        for (const line of chunk.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6);
-          if (data === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.text) {
-              appendStreamChunk(parsed.text);
-              fullContent += parsed.text;
-            }
-            if (parsed.followups) setPendingFollowups(parsed.followups);
-          } catch { /* ignore */ }
-        }
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop() ?? "";
+        for (const line of lines) processLine(line);
       }
+      if (sseBuffer) processLine(sseBuffer);
 
       const followups = useChatStore.getState().pendingFollowups;
       const assistantMsg: ChatMessage = {
@@ -280,20 +283,26 @@ export default function ChatContainer() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let finalContent = "";
+      let sseBuffer = "";
+
+      function processLine(line: string) {
+        if (!line.startsWith("data: ")) return;
+        try {
+          const event = JSON.parse(line.slice(6)) as AgentEvent;
+          handleAgentEvent(event);
+          if (event.type === "final_response") finalContent = event.content;
+        } catch { /* ignore */ }
+      }
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
-        for (const line of chunk.split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6)) as AgentEvent;
-            handleAgentEvent(event);
-            if (event.type === "final_response") finalContent = event.content;
-          } catch { /* ignore */ }
-        }
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop() ?? "";
+        for (const line of lines) processLine(line);
       }
+      if (sseBuffer) processLine(sseBuffer);
 
       if (finalContent) {
         const state = useChatStore.getState();

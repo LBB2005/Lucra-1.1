@@ -550,6 +550,10 @@ export default function Sidebar() {
       {/* Hedge Fund nav button */}
       <Link
         href="/hedge-fund"
+        onClick={() => {
+          localStorage.setItem("lucra-theme", "dark");
+          document.documentElement.setAttribute("data-theme", "dark");
+        }}
         className="flex items-center gap-[6px] mx-[14px] mb-3 px-[10px] py-[6px] text-[12px] font-medium transition-all duration-150 flex-shrink-0"
         style={
           isOnHedgeFund
@@ -684,7 +688,10 @@ export default function Sidebar() {
               await authFetch("/api/portfolio", { method: "DELETE" });
             }
             for (const h of holdings) {
-              await addHolding({ ticker: h.ticker, companyName: h.companyName ?? null, shares: h.shares, avgCost: h.avgCost ?? 0, sector: null });
+              const shares = typeof h.shares === "number" ? h.shares : parseFloat(String(h.shares));
+              const avgCost = typeof h.avgCost === "number" ? h.avgCost : h.avgCost != null ? parseFloat(String(h.avgCost)) : 0;
+              if (!h.ticker || !isFinite(shares) || shares <= 0) continue;
+              await addHolding({ ticker: h.ticker, companyName: h.companyName ?? null, shares, avgCost: isFinite(avgCost) ? avgCost : 0, sector: null });
             }
             if (buyingPower != null && buyingPower > 0) {
               await setCashBalance(buyingPower);

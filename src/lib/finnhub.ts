@@ -1,3 +1,5 @@
+import { getAggregates } from "@/lib/polygon";
+
 const BASE = "https://finnhub.io/api/v1";
 const KEY = process.env.FINNHUB_API_KEY;
 
@@ -47,10 +49,92 @@ export async function getSnapshots(tickers: string[]): Promise<TickerSnapshot[]>
     .map((r) => r.value);
 }
 
-// OHLCV candles for technical analysis
+// Finnhub candle response shape, also produced by the Polygon fallback below.
+export interface CandleResponse {
+  s: "ok" | "no_data";
+  c: number[];
+  o: number[];
+  h: number[];
+  l: number[];
+  v: number[];
+  t: number[]; // Unix seconds
+}
+
+// Map a Finnhub resolution to a Polygon (multiplier, timespan) pair.
+function resolutionToPolygon(resolution: string): { multiplier: number; timespan: string } {
+  switch (resolution) {
+    case "D": return { multiplier: 1, timespan: "day" };
+    case "W": return { multiplier: 1, timespan: "week" };
+    case "M": return { multiplier: 1, timespan: "month" };
+    default: {
+      const n = parseInt(resolution, 10);
+      return Number.isFinite(n) && n > 0
+        ? { multiplier: n, timespan: "minute" }
+        : { multiplier: 1, timespan: "day" };
+    }
+  }
+}
+
+// Fetch OHLC from Polygon aggregates and reshape into the Finnhub candle format.
+async function getCandlesFromPolygon(
+  ticker: string,
+  resolution: string,
+  fromTs: number,
+  toTs: number
+): Promise<CandleResponse> {
+  const { multiplier, timespan } = resolutionToPolygon(resolution);
+  const from = new Date(fromTs * 1000).toISOString().slice(0, 10);
+  const to = new Date(toTs * 1000).toISOString().slice(0, 10);
+  const data = await getAggregates(ticker, multiplier, timespan, from, to) as {
+    results?: { o: number; h: number; l: number; c: number; v: number; t: number }[];
+  };
+  const results = data.results ?? [];
+  if (results.length === 0) {
+    return { s: "no_data", c: [], o: [], h: [], l: [], v: [], t: [] };
+  }
+  return {
+    s: "ok",
+    c: results.map((r) => r.c),
+    o: results.map((r) => r.o),
+    h: results.map((r) => r.h),
+    l: results.map((r) => r.l),
+    v: results.map((r) => r.v),
+    t: results.map((r) => Math.floor(r.t / 1000)), // Polygon ms → Finnhub seconds
+  };
+}
+
+// OHLCV candles for technical analysis.
 // resolution: 1, 5, 15, 30, 60, D, W, M
-export async function getCandles(ticker: string, resolution: string, fromTs: number, toTs: number) {
-  return fhFetch(`/stock/candle?symbol=${ticker}&resolution=${resolution}&from=${fromTs}&to=${toTs}`);
+//
+// Finnhub's /stock/candle endpoint is premium-gated (returns 403 on free/standard
+// plans) even though /quote still works. We therefore try Finnhub first and
+// transparently fall back to Polygon aggregates, returning the same shape so every
+// caller (technical agent, risk agent, backtest) keeps working regardless of plan.
+export async function getCandles(
+  ticker: string,
+  resolution: string,
+  fromTs: number,
+  toTs: number
+): Promise<CandleResponse> {
+  if (KEY) {
+    try {
+      const data = await fhFetch(
+        `/stock/candle?symbol=${ticker}&resolution=${resolution}&from=${fromTs}&to=${toTs}`
+      ) as CandleResponse;
+      if (data?.s === "ok" && Array.isArray(data.c) && data.c.length > 0) {
+        return data;
+      }
+    } catch {
+      /* fall through to Polygon */
+    }
+  }
+
+  if (process.env.POLYGON_API_KEY) {
+    return getCandlesFromPolygon(ticker, resolution, fromTs, toTs);
+  }
+
+  // No working data source — surface as Finnhub-shaped "no data" so callers degrade gracefully.
+  return { s: "no_data", c: [], o: [], h: [], l: [], v: [], t: [] };
 }
 
 // Company news

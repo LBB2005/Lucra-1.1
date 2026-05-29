@@ -96,6 +96,14 @@
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.5);
+
+  & .hf-shell {
+    --color-bg: #0d1117;
+    --color-surface: #161b22;
+    --color-surface-2: #21262d;
+    --color-border: #30363d;
+    --color-border-strong: #3d444d;
+  }
 }
 
 @theme inline {
@@ -188,6 +196,7 @@ body {
   --radius-lg: 5px;
   --radius-xl: 6px;
 }
+
 
 /* ── Sub-nav ─────────────────────────────────────────────── */
 .hf-subnav {

@@ -71,7 +71,16 @@ Return only the JSON object, no other text`;
       holdings = JSON.parse(arrMatch![0]);
     }
 
-    return NextResponse.json({ holdings, buyingPower });
+    const sanitized = (holdings as Record<string, unknown>[])
+      .map((h) => ({
+        ticker: typeof h.ticker === "string" ? h.ticker.toUpperCase().trim() : null,
+        companyName: typeof h.companyName === "string" ? h.companyName : null,
+        shares: typeof h.shares === "number" ? h.shares : typeof h.shares === "string" ? parseFloat(h.shares) : null,
+        avgCost: typeof h.avgCost === "number" ? h.avgCost : typeof h.avgCost === "string" ? parseFloat(h.avgCost) : null,
+      }))
+      .filter((h) => h.ticker && typeof h.shares === "number" && !isNaN(h.shares) && h.shares > 0);
+
+    return NextResponse.json({ holdings: sanitized, buyingPower });
   } catch (err) {
     console.error("[statement POST]", err);
     return NextResponse.json({ error: "Failed to process statement" }, { status: 500 });

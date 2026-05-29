@@ -48,8 +48,8 @@ export async function POST(req: Request) {
     if (shares <= 0) {
       return NextResponse.json({ error: "shares must be positive" }, { status: 400 });
     }
-    if (avgCost <= 0) {
-      return NextResponse.json({ error: "avgCost must be positive" }, { status: 400 });
+    if (avgCost < 0) {
+      return NextResponse.json({ error: "avgCost cannot be negative" }, { status: 400 });
     }
 
     const upperTicker = ticker.toUpperCase();

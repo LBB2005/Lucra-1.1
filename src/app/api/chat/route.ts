@@ -1,9 +1,13 @@
 import { anthropic, MODEL, HAIKU } from "@/lib/anthropic";
+import { requireAuth } from "@/lib/requireAuth";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   const { messages, portfolioContext } = await req.json();
 
   const systemPrompt = `You are Lucra, an expert AI financial research assistant. You help users research stocks, analyze their portfolio, and make informed investment decisions.
