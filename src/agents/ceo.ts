@@ -180,6 +180,11 @@ You are running in Deep Research mode. This means:
   // Accumulate sub-agent outputs for the skeptic pass
   const agentOutputs = new Map<string, string>();
   let finalResponse = "";
+  // Background persistence (cache/memory/style). These used to be true
+  // fire-and-forget, but on Vercel the function instance can freeze the moment
+  // the response stream closes, silently dropping any still-pending write. We
+  // collect them here and flush before signalling "done".
+  const pendingWrites: Promise<unknown>[] = [];
 
   while (iteration < MAX_ITERATIONS) {
     iteration++;
@@ -216,13 +221,17 @@ You are running in Deep Research mode. This means:
           : "");
       if (!finalResponse) finalResponse = "Analysis complete.";
       emit({ type: "final_response", content: finalResponse });
-      // Fire-and-forget: save ticker memory and update user investing style
-      saveTickerMemory(mentionedTickers, finalResponse, anthropic).catch((e) =>
-        console.error("[memory] save error:", e)
+      // Save ticker memory and update user investing style — flushed before "done".
+      pendingWrites.push(
+        saveTickerMemory(mentionedTickers, finalResponse, anthropic).catch((e) =>
+          console.error("[memory] save error:", e)
+        )
       );
       if (userId) {
-        updateStyleFromConversation(userId, userPrompt, finalResponse, anthropic).catch((e) =>
-          console.error("[userPreference] update error:", e)
+        pendingWrites.push(
+          updateStyleFromConversation(userId, userPrompt, finalResponse, anthropic).catch((e) =>
+            console.error("[userPreference] update error:", e)
+          )
         );
       }
       break;
@@ -272,9 +281,11 @@ You are running in Deep Research mode. This means:
             (DEEP_AGENTS.has(block.name) ? DEEP_AGENT_TIMEOUT_MS : STANDARD_TIMEOUT_MS);
           const result = await withTimeout(run, agentTimeoutMs, block.name);
 
-          // ── Cache save (non-blocking) ─────────────────────────────────────
-          saveCache(block.name, block.input, result).catch((e) =>
-            console.error("[cache] save error:", e)
+          // ── Cache save (deferred, flushed before "done") ──────────────────
+          pendingWrites.push(
+            saveCache(block.name, block.input, result).catch((e) =>
+              console.error("[cache] save error:", e)
+            )
           );
 
           agentOutputs.set(block.name, result);
@@ -378,6 +389,12 @@ Be direct and constructive. Start with "**Skeptic Review:**"`,
     } catch {
       // Follow-ups are best-effort — don't fail the response
     }
+  }
+
+  // Flush background persistence before the stream closes — otherwise Vercel may
+  // freeze the instance and these Firestore writes never land.
+  if (pendingWrites.length) {
+    await Promise.allSettled(pendingWrites);
   }
 
   emit({ type: "done" });

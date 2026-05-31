@@ -169,25 +169,34 @@ export async function searchRecentForm4(ticker: string, daysBack = 3, limit = 10
   from.setDate(from.getDate() - daysBack);
 
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  const url = `https://efts.sec.gov/LATEST/search-index?q=%22${encodeURIComponent(ticker)}%22&forms=4&dateRange=custom&startdt=${fmt(from)}&enddt=${fmt(today)}&hits.hits.total.value=true&hits.hits._source.period_of_report=true`;
+  const url = `https://efts.sec.gov/LATEST/search-index?q=%22${encodeURIComponent(ticker)}%22&forms=4&startdt=${fmt(from)}&enddt=${fmt(today)}`;
 
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const hits: any[] = data.hits?.hits ?? [];
-    return hits.slice(0, limit).map((hit) => ({
-      entityName: hit._source?.entity_name ?? "",
-      filedAt: hit._source?.file_date ?? "",
-      periodOfReport: hit._source?.period_of_report ?? "",
-      accessionNo: hit._id ?? "",
-      cik: hit._source?.entity_id ?? "",
-    }));
-  } catch {
-    return [];
-  }
+  // Deliberately NOT swallowing fetch errors: an empty array must mean "no
+  // filings in the window," not "the lookup failed." The caller relies on a
+  // thrown error to tell those apart so it never reports a network failure as
+  // "no insider activity."
+  const res = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`EDGAR FTS ${res.status}`);
+  const data = await res.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hits: any[] = data.hits?.hits ?? [];
+  return hits.slice(0, limit).map((hit) => {
+    const src = hit._source ?? {};
+    const names: string[] = Array.isArray(src.display_names) ? src.display_names : [];
+    const ciks: string[] = Array.isArray(src.ciks) ? src.ciks : [];
+    // For a Form 4, display_names[0]/ciks[0] are the reporting owner (the
+    // insider); the issuer is the second entry. Strip the "(CIK …)" suffix
+    // EDGAR appends to display names.
+    const insiderName = (names[0] ?? "").replace(/\s*\(CIK\s+\d+\)\s*$/i, "").trim();
+    return {
+      entityName: insiderName,
+      filedAt: src.file_date ?? "",
+      periodOfReport: src.period_ending ?? "",
+      accessionNo: src.adsh ?? (typeof hit._id === "string" ? hit._id.split(":")[0] : ""),
+      cik: ciks[0] ?? "",
+    };
+  });
 }

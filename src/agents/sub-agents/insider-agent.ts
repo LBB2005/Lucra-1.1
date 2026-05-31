@@ -9,7 +9,7 @@
 import { anthropic, MODEL } from "@/lib/anthropic";
 import { getSkillsPrompt } from "@/agents/skills";
 import { getInsiderTransactions } from "@/lib/finnhub";
-import { searchRecentForm4 } from "@/lib/edgar";
+import { searchRecentForm4, type Form4Filing } from "@/lib/edgar";
 
 const USER_AGENT = "Lucra App liamblackshawbrown@gmail.com";
 
@@ -123,10 +123,19 @@ export async function runInsiderAgent(input: unknown): Promise<string> {
 
   // ── A. EDGAR Form 4 recent purchases (last 48h, >$100K) ──────────────────
   const recentPurchases: RecentPurchase[] = [];
+  // Tickers whose EDGAR lookup itself failed (network/HTTP), as opposed to
+  // returning zero filings. We must not report a failed lookup as "no activity."
+  const edgarFailed: string[] = [];
 
   await Promise.allSettled(
     tickers.map(async (ticker) => {
-      const filings = await searchRecentForm4(ticker, 3, 8);
+      let filings: Form4Filing[];
+      try {
+        filings = await searchRecentForm4(ticker, 3, 8);
+      } catch {
+        edgarFailed.push(ticker);
+        return;
+      }
       const parsedResults = await Promise.allSettled(
         filings.map((f) =>
           parseForm4Purchases(f.accessionNo, f.cik, f.filedAt, f.periodOfReport, f.entityName, ticker)
@@ -153,9 +162,17 @@ export async function runInsiderAgent(input: unknown): Promise<string> {
       return `${i + 1}. ${p.insiderName}${titlePart} — BOUGHT ${p.shares.toLocaleString()} shares @ $${p.price.toFixed(2)} = ${val}${position}\n   Filed: ${p.filedAt} | Period: ${p.periodOfReport}`;
     });
     sections.push(`## RECENT FORM 4 FILINGS — Purchases >$100K (last 3 days)\n\n${lines.join("\n\n")}`);
-  } else {
+  } else if (edgarFailed.length === tickers.length) {
+    // Every lookup failed — we have NO information, not a "no activity" signal.
     sections.push(
-      `## RECENT FORM 4 FILINGS (last 3 days)\n\nNo qualifying insider purchases (>$100K) found for ${tickers.join(", ")} in the last 3 days. This could mean no transactions occurred, or filings are delayed (Form 4 must be filed within 2 business days of transaction).`
+      `## RECENT FORM 4 FILINGS (last 3 days)\n\n⚠️ EDGAR Form 4 lookup was UNAVAILABLE for ${tickers.join(", ")} (the SEC full-text search could not be reached). Recent insider purchase activity is UNKNOWN — do not treat this as an absence of purchases.`
+    );
+  } else {
+    const failNote = edgarFailed.length
+      ? ` (Note: the EDGAR lookup failed for ${edgarFailed.join(", ")}, so those are UNKNOWN rather than confirmed-empty.)`
+      : "";
+    sections.push(
+      `## RECENT FORM 4 FILINGS (last 3 days)\n\nNo qualifying insider purchases (>$100K) found for ${tickers.join(", ")} in the last 3 days. This could mean no transactions occurred, or filings are delayed (Form 4 must be filed within 2 business days of transaction).${failNote}`
     );
   }
 

@@ -8,6 +8,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { useQuotes } from "@/hooks/useQuotes";
 import { useAuth } from "@/context/AuthContext";
 import ConversationList from "./ConversationList";
+import ChatSearchModal from "./ChatSearchModal";
 import PortfolioList from "./PortfolioList";
 import AddHoldingModal from "@/components/portfolio/AddHoldingModal";
 import CsvUploadModal from "@/components/portfolio/CsvUploadModal";
@@ -403,13 +404,20 @@ function UserWidget() {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({
+  mobile = false,
+  onNavigate,
+}: {
+  mobile?: boolean;
+  onNavigate?: () => void;
+} = {}) {
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [portfolioOpen, setPortfolioOpen] = useState(true);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showCsv, setShowCsv] = useState(false);
   const [showStatement, setShowStatement] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
@@ -472,7 +480,7 @@ export default function Sidebar() {
     <aside
       className="relative flex flex-col h-full flex-shrink-0 overflow-hidden"
       style={{
-        width,
+        width: mobile ? "100%" : width,
         background: "var(--color-sidebar)",
         borderRight: "1px solid var(--color-border)",
       }}
@@ -485,15 +493,26 @@ export default function Sidebar() {
         >
           LUCRA
         </span>
-        <button
-          onClick={reset}
-          title="New chat"
-          className="w-[26px] h-[26px] flex items-center justify-center rounded-[7px] text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-light)] transition-colors duration-150"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => setShowSearch(true)}
+            title="Search chats"
+            className="w-[26px] h-[26px] flex items-center justify-center rounded-[7px] text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-light)] transition-colors duration-150"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </button>
+          <button
+            onClick={() => { reset(); onNavigate?.(); }}
+            title="New chat"
+            className="w-[26px] h-[26px] flex items-center justify-center rounded-[7px] text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-light)] transition-colors duration-150"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Nav pill — Chat + Portfolio */}
@@ -507,6 +526,7 @@ export default function Sidebar() {
       >
         <Link
           href="/chat"
+          onClick={onNavigate}
           className="flex-1 text-center text-[12px] font-medium py-[5px] transition-all duration-150 relative"
           style={
             !isOnPortfolio && !isOnHedgeFund
@@ -530,6 +550,7 @@ export default function Sidebar() {
         </Link>
         <Link
           href="/portfolio"
+          onClick={onNavigate}
           className="flex-1 text-center text-[12px] font-medium py-[5px] transition-all duration-150"
           style={
             isOnPortfolio
@@ -550,10 +571,7 @@ export default function Sidebar() {
       {/* Hedge Fund nav button */}
       <Link
         href="/hedge-fund"
-        onClick={() => {
-          localStorage.setItem("lucra-theme", "dark");
-          document.documentElement.setAttribute("data-theme", "dark");
-        }}
+        onClick={onNavigate}
         className="flex items-center gap-[6px] mx-[14px] mb-3 px-[10px] py-[6px] text-[12px] font-medium transition-all duration-150 flex-shrink-0"
         style={
           isOnHedgeFund
@@ -657,18 +675,22 @@ export default function Sidebar() {
         <ConversationList />
       </div>
 
+      {showSearch && <ChatSearchModal onClose={() => setShowSearch(false)} />}
+
       {/* User widget */}
       <div className="flex-shrink-0 border-t" style={{ borderColor: "var(--color-border)" }}>
         <UserWidget />
       </div>
 
-      {/* Resize handle */}
-      <div
-        onMouseDown={startResize}
-        className="absolute top-0 right-0 w-[5px] h-full cursor-col-resize z-10 group"
-      >
-        <div className="absolute right-0 top-0 w-[1px] h-full bg-[var(--color-border)] group-hover:w-[2px] group-hover:bg-[var(--color-accent-medium)] transition-all duration-150" />
-      </div>
+      {/* Resize handle — desktop only */}
+      {!mobile && (
+        <div
+          onMouseDown={startResize}
+          className="absolute top-0 right-0 w-[5px] h-full cursor-col-resize z-10 group"
+        >
+          <div className="absolute right-0 top-0 w-[1px] h-full bg-[var(--color-border)] group-hover:w-[2px] group-hover:bg-[var(--color-accent-medium)] transition-all duration-150" />
+        </div>
+      )}
 
       {/* Modals */}
       {showAdd && (

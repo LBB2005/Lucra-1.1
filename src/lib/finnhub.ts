@@ -25,6 +25,10 @@ export interface TickerSnapshot {
   low: number;
   open: number;
   prevClose: number;
+  // ISO timestamp of the underlying market quote (Finnhub's `t`), so the UI can
+  // show how fresh the price is rather than implying it's real-time. Quotes are
+  // cached up to 30s (revalidate), so "now" would overstate freshness.
+  asOf: string;
 }
 
 // Real-time quote for a single ticker.
@@ -47,6 +51,9 @@ export async function getQuote(ticker: string): Promise<TickerSnapshot> {
     low: d.l ?? 0,
     open: d.o ?? 0,
     prevClose: d.pc ?? 0,
+    asOf: typeof d.t === "number" && d.t > 0
+      ? new Date(d.t * 1000).toISOString()
+      : new Date().toISOString(),
   };
 }
 

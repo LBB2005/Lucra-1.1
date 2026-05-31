@@ -22,6 +22,9 @@ interface AuthContextValue {
   loading: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  devEnabled: boolean;
+  devBypass: boolean;
+  toggleDevBypass: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -29,31 +32,75 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signIn: async () => {},
   signOut: async () => {},
+  devEnabled: false,
+  devBypass: false,
+  toggleDevBypass: () => {},
 });
 
+// Routes a logged-out visitor is allowed to see (no redirect to /login).
+const PUBLIC_ROUTES = ["/", "/login"];
+
+// Dev-only auth bypass: never available in a production build.
+const DEV_ENABLED = process.env.NODE_ENV !== "production";
+
+// Stand-in for a Firebase user. Has no real UID/token, so authenticated
+// Firestore reads and token-gated API calls will not work under it.
+const MOCK_USER = {
+  uid: "dev-user",
+  email: "dev@lucra.local",
+  displayName: "Dev User",
+  photoURL: null,
+  emailVerified: true,
+  isAnonymous: false,
+} as unknown as User;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [realUser, setRealUser] = useState<User | null>(null);
+  const [devBypass, setDevBypass] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+
+  const user = realUser ?? (DEV_ENABLED && devBypass ? MOCK_USER : null);
+
+  useEffect(() => {
+    if (DEV_ENABLED && typeof window !== "undefined") {
+      setDevBypass(localStorage.getItem("lucra_dev_auth") === "1");
+    }
+  }, []);
 
   useEffect(() => {
     // Handle redirect result on page load (after Google redirect back)
     getRedirectResult(auth).catch(() => {});
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+      setRealUser(firebaseUser);
       setLoading(false);
-
-      if (!firebaseUser && pathname !== "/login") {
-        router.push("/login");
-      }
-      if (firebaseUser && pathname === "/login") {
-        router.push("/");
-      }
     });
     return unsubscribe;
-  }, [pathname, router]);
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user && !PUBLIC_ROUTES.includes(pathname)) {
+      router.push("/login");
+    }
+    if (user && (pathname === "/login" || pathname === "/")) {
+      router.push("/chat");
+    }
+  }, [user, loading, pathname, router]);
+
+  function toggleDevBypass() {
+    if (!DEV_ENABLED) return;
+    setDevBypass((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        if (next) localStorage.setItem("lucra_dev_auth", "1");
+        else localStorage.removeItem("lucra_dev_auth");
+      }
+      return next;
+    });
+  }
 
   async function signIn() {
     try {
@@ -71,12 +118,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    if (DEV_ENABLED && devBypass) {
+      setDevBypass(false);
+      if (typeof window !== "undefined") localStorage.removeItem("lucra_dev_auth");
+    }
     await firebaseSignOut(auth);
     router.push("/login");
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ user, loading, signIn, signOut, devEnabled: DEV_ENABLED, devBypass, toggleDevBypass }}
+    >
       {children}
     </AuthContext.Provider>
   );

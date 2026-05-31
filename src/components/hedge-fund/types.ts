@@ -28,6 +28,7 @@ export interface TickerMarkov {
 export interface CompositeMarkov {
   bias: Regime;
   avgBull: number;
+  avgSideways: number;
   avgBear: number;
   avgSharpe: number;
   equityPct: number;

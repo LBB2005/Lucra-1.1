@@ -6,6 +6,7 @@ import AgentDetailModal from "@/components/agent/AgentDetailModal";
 import { AGENT_LABELS } from "@/types/chat";
 import type { ChatMessage, ChatMode, AgentStep } from "@/types/chat";
 import { useMarketPulse } from "@/hooks/useMarketPulse";
+import { usMarketStatus } from "@/lib/marketHours";
 import { AGENT_COUNT } from "@/types/chat";
 
 /* ── Starter prompts with tags ──────────────────────────────────────────── */
@@ -271,6 +272,7 @@ const AGENT_FOCUS: Record<string, string> = {
 /* ── Market Pulse strip ──────────────────────────────────────────────────── */
 function MarketPulse() {
   const { items, isLoading } = useMarketPulse();
+  const market = usMarketStatus();
 
   return (
     <div
@@ -280,17 +282,17 @@ function MarketPulse() {
       {/* Header row */}
       <div className="flex items-center justify-between mb-[10px]">
         <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
-          Market Pulse · Live
+          Market Pulse
         </span>
         <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-muted)]">
           <span
             className="inline-block w-[6px] h-[6px] rounded-full"
             style={{
-              background: "var(--color-bull)",
-              boxShadow: "0 0 0 3px color-mix(in oklab, var(--color-bull) 22%, transparent)",
+              background: market.open ? "var(--color-bull)" : "var(--color-muted)",
+              boxShadow: market.open ? "0 0 0 3px color-mix(in oklab, var(--color-bull) 22%, transparent)" : "none",
             }}
           />
-          {isLoading ? "Loading…" : "Open"}
+          {isLoading ? "Loading…" : market.label}
         </span>
       </div>
 
@@ -301,10 +303,11 @@ function MarketPulse() {
           return (
             <div key={item.ticker}>
               <p
-                className="text-[10.5px] font-semibold uppercase tracking-[0.16em] mb-1"
+                className="flex items-baseline gap-1 text-[10.5px] font-semibold uppercase tracking-[0.16em] mb-1"
                 style={{ color: "var(--color-muted)" }}
               >
                 {item.label}
+                <span className="text-[8.5px] tracking-[0.08em] opacity-70">{item.ticker}</span>
               </p>
               <p
                 className="text-[15px] font-semibold leading-[1.1] tabular-nums"

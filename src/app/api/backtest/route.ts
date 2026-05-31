@@ -180,28 +180,35 @@ function computeBacktest(
     }
   }
 
-  // Build daily return arrays per ticker (index aligned to sorted date list)
-  const dailyRetsByTicker: Record<string, number[]> = {};
-  const dateListByTicker: Record<string, string[]> = {};
-  for (const ticker of [...config.tickers, config.benchmark]) {
+  // Anchor every series to a common calendar: the dates present in EVERY ticker
+  // (benchmark included). Combining returns by array index would desync tickers
+  // that trade on different days (listing gaps, halts, missing bars) — day N of
+  // one ticker could be a different calendar date than day N of another. By
+  // computing returns over a single shared, sorted date list we guarantee index
+  // i means the same date for all series.
+  const seriesTickers = [...config.tickers, config.benchmark];
+  let commonDates: string[] = Object.keys(pricesByTicker[config.benchmark] ?? {}).sort();
+  for (const ticker of seriesTickers) {
     const prices = pricesByTicker[ticker] ?? {};
-    const sorted = Object.keys(prices).sort();
-    dateListByTicker[ticker] = sorted;
+    commonDates = commonDates.filter((d) => prices[d] != null);
+  }
+
+  const dailyRetsByTicker: Record<string, number[]> = {};
+  for (const ticker of seriesTickers) {
+    const prices = pricesByTicker[ticker] ?? {};
     const rets: number[] = [];
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = prices[sorted[i - 1]];
-      const curr = prices[sorted[i]];
+    for (let i = 1; i < commonDates.length; i++) {
+      const prev = prices[commonDates[i - 1]];
+      const curr = prices[commonDates[i]];
       rets.push(prev > 0 ? (curr - prev) / prev : 0);
     }
     dailyRetsByTicker[ticker] = rets;
   }
 
   const benchRets = dailyRetsByTicker[config.benchmark] ?? [];
-  const benchDates = dateListByTicker[config.benchmark] ?? [];
-  const nDays = Math.min(
-    benchRets.length,
-    ...config.tickers.map((t) => dailyRetsByTicker[t]?.length ?? 0)
-  );
+  // Every series now shares this length; the return at index i is the move from
+  // commonDates[i] to commonDates[i+1].
+  const nDays = Math.max(0, commonDates.length - 1);
 
   // Compute portfolio daily returns
   const portRets: number[] = [];
@@ -245,7 +252,7 @@ function computeBacktest(
   }
 
   // Build cumulative return series (downsample to ≤200 points)
-  const seriesDates = benchDates.slice(1, nDays + 1);
+  const seriesDates = commonDates.slice(1, nDays + 1);
   const rawSeries: BacktestSeries[] = [];
   let cumPort = 1;
   let cumBench = 1;

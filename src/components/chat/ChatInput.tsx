@@ -218,7 +218,7 @@ export default function ChatInput({ onSend, disabled, mode, onModeChange }: Prop
               disabled={disabled}
               onInput={resize}
               onKeyDown={handleKey}
-              className="flex-1 resize-none bg-transparent focus:outline-none py-3.5 pr-[52px] leading-[1.55] text-[14px]"
+              className="chat-textarea flex-1 resize-none bg-transparent focus:outline-none py-3.5 pr-[52px] leading-[1.55] text-[14px]"
               style={{ color: "var(--color-text)", maxHeight: 180, fontFamily: "var(--font-sans)" }}
             />
 

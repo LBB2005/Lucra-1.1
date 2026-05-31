@@ -2,16 +2,23 @@
 import useSWR from "swr";
 import type { Holding } from "@/types/portfolio";
 import { authFetch, authFetcher } from "@/lib/authFetch";
+import { useAuth } from "@/context/AuthContext";
+import { DEV_HOLDINGS, DEV_CASH } from "@/lib/devPortfolio";
 
 export function usePortfolio() {
+  // The dev auth bypass user has no Firebase token, so the Firestore-backed
+  // portfolio API returns 401. Serve a mock book instead of fetching.
+  const { devBypass } = useAuth();
+  const isDevMock = devBypass;
+
   const { data, error, isLoading, mutate } = useSWR<Holding[]>(
-    "/api/portfolio",
+    isDevMock ? null : "/api/portfolio",
     authFetcher,
     { revalidateOnFocus: false }
   );
 
   const { data: settingsData, mutate: mutateSettings } = useSWR<{ cashBalance: number }>(
-    "/api/portfolio/settings",
+    isDevMock ? null : "/api/portfolio/settings",
     authFetcher,
     { revalidateOnFocus: false }
   );
@@ -52,8 +59,8 @@ export function usePortfolio() {
   }
 
   return {
-    holdings: Array.isArray(data) ? data : [],
-    cashBalance: settingsData?.cashBalance ?? 0,
+    holdings: isDevMock ? DEV_HOLDINGS : (Array.isArray(data) ? data : []),
+    cashBalance: isDevMock ? DEV_CASH : (settingsData?.cashBalance ?? 0),
     error,
     isLoading,
     mutate,

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
+import AppShell from "@/components/layout/AppShell";
 import { AuthProvider } from "@/context/AuthContext";
+import DevAuthToggle from "@/components/dev/DevAuthToggle";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,10 +41,10 @@ export default function RootLayout({
         {/* Apply stored theme before first paint to avoid flash */}
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('lucra-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}` }} />
       </head>
-      <body className="h-full flex overflow-hidden bg-[var(--color-bg)]">
+      <body className="h-full bg-[var(--color-bg)]">
         <AuthProvider>
-          <Sidebar />
-          <main className="flex-1 flex flex-col overflow-hidden">{children}</main>
+          <AppShell>{children}</AppShell>
+          <DevAuthToggle />
         </AuthProvider>
       </body>
     </html>

@@ -24,20 +24,21 @@ export default function ChatHeader({ mode, onModeChange, title = "Research", eye
       className="flex-shrink-0 flex items-center justify-between px-7 h-[52px]"
       style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-bg)" }}
     >
-      {/* Left: eyebrow + title */}
-      <div className="flex items-baseline gap-3.5">
+      {/* Left: eyebrow + title — allowed to shrink/truncate so it never collides
+          with the mode toggle on narrow viewports. */}
+      <div className="flex items-baseline gap-3.5 min-w-0 mr-3">
         <span
-          className="text-[12px] italic"
+          className="hidden sm:inline text-[12px] italic whitespace-nowrap flex-shrink-0"
           style={{ fontFamily: "var(--font-serif)", color: "var(--color-muted)" }}
         >
           {eyebrow ?? dayLabel}
         </span>
-        <h1 className="m-0 text-[15px] font-semibold text-[var(--color-text)]" style={{ fontFamily: "var(--font-serif)" }}>{title}</h1>
+        <h1 className="m-0 text-[15px] font-semibold text-[var(--color-text)] truncate" style={{ fontFamily: "var(--font-serif)" }}>{title}</h1>
       </div>
 
       {/* Right: Chat ↔ Agent toggle */}
       <div
-        className="inline-flex p-[3px] gap-[2px] rounded-[10px]"
+        className="inline-flex flex-shrink-0 p-[3px] gap-[2px] rounded-[10px]"
         style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}
       >
         <button

@@ -51,7 +51,6 @@ export default function ConversationList() {
     { refreshInterval: 30_000, revalidateOnFocus: true }
   );
   const [pinned, setPinned] = useState<Set<string>>(getPinned);
-  const [query, setQuery] = useState("");
 
   const { conversationId, setConversationId, setMessages, setStreaming, clearStreamingContent, clearAgentSteps, streamingConversationId } = useChatStore();
 
@@ -117,17 +116,12 @@ export default function ConversationList() {
     );
   }
 
-  const filtered = (Array.isArray(conversations) ? conversations : []).filter((c) => {
-    if (!query) return true;
-    const q = query.toLowerCase();
-    return getTitle(c).toLowerCase().includes(q) ||
-      c.messages.some((m) => m.content.toLowerCase().includes(q));
-  });
+  const filtered = Array.isArray(conversations) ? conversations : [];
 
   if (!filtered.length) {
     return (
       <div className="px-3 py-2 text-xs text-[var(--color-muted)]">
-        {query ? "No matching chats" : "No chats yet"}
+        No chats yet
       </div>
     );
   }
@@ -198,28 +192,6 @@ export default function ConversationList() {
 
   return (
     <div className="flex flex-col gap-0.5">
-      {/* Search */}
-      <div className="px-3 pb-1">
-        <div className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-[8px]" style={{ background: "var(--color-surface-2)", border: "1px solid var(--color-border)" }}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-[var(--color-muted)] flex-shrink-0">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search chats…"
-            className="flex-1 bg-transparent text-[11px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] outline-none"
-          />
-          {query && (
-            <button onClick={() => setQuery("")} className="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors">
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </div>
       {/* Pinned */}
       {pinnedConvs.length > 0 && (
         <div>
